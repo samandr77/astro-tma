@@ -5,6 +5,9 @@
   gap: 12px;
   padding-bottom: 300px;
   transition: padding-bottom 0.4s ease;
+  max-width: 100%;
+  min-width: 0;
+  font-family: var(--tarot-font-body);
 }
 .flowContainer.noPad {
   padding-bottom: 24px;
@@ -12,27 +15,34 @@
 
 .prompt {
   text-align: center;
-  font-family: "Cormorant Garamond", "Playfair Display", serif;
-  font-size: 15px;
-  letter-spacing: 0.06em;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-small-size);
+  letter-spacing: 0;
+  line-height: 1.45;
   color: rgba(212, 178, 84, 0.85);
   margin: 0 0 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
   animation: promptPulse 2.4s ease-in-out infinite;
 }
 
 .promptCta {
   display: block;
   text-align: center;
-  font-family: "Cinzel", "Playfair Display", Georgia, serif;
-  font-size: 12px;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
   font-weight: 500;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  line-height: 1.4;
   color: #e8c862;
   animation: promptShimmer 2.8s ease-in-out infinite;
   margin: 28px auto 8px;
   padding: 0 16px;
   max-width: 320px;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
   pointer-events: none;
 }
 
@@ -110,7 +120,8 @@
   transform: translate(-50%, -50%) rotate(-90deg);
 }
 .placeholderSymbol {
-  font-family: "Playfair Display", serif;
+  font-family: var(--tarot-font-display);
+  font-weight: 600;
   font-size: 20px;
   line-height: 1;
   color: rgba(212, 178, 84, 0.64);
@@ -145,12 +156,15 @@
   margin-top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  font-family: "Cinzel", "Playfair Display", serif;
-  font-size: 14px;
-  letter-spacing: 0.15em;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: rgba(201, 168, 76, 0.75);
-  white-space: nowrap;
+  max-width: 112px;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  text-align: center;
   pointer-events: none;
 }
 .slotLabelRight {
@@ -183,6 +197,17 @@
   gap: 14px;
   pointer-events: none;
 }
+.deckWrapSettled {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  align-self: flex-end;
+  margin: -64px max(8px, var(--content-px)) 12px 0;
+  transform: scale(0.74);
+  transform-origin: bottom right;
+  opacity: 0.58;
+  z-index: 1;
+}
 .deck {
   position: relative;
   width: 88px;
@@ -214,10 +239,14 @@
   100% { transform: rotate(0) translateX(0) scale(1); }
 }
 .deckLabel {
-  font-family: "Cinzel", "Playfair Display", serif;
-  font-size: 11px;
-  letter-spacing: 0.28em;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
+  letter-spacing: 0.08em;
+  line-height: 1.35;
   color: rgba(201, 168, 76, 0.75);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .remainingDeck {
@@ -228,6 +257,12 @@
   opacity: 0.72;
   pointer-events: none;
 }
+.deckWrapSettled .remainingDeck {
+  margin: 0;
+}
+.deckWrapSettled .deckLabel {
+  display: none;
+}
 .remainingCard {
   position: absolute;
   left: 24px;
@@ -235,9 +270,9 @@
   width: 34px;
   height: 50px;
   border-radius: 5px;
-  background: url("/tarot-back.jpg") center/cover no-repeat;
-  border: 1px solid rgba(212, 178, 84, 0.32);
+  border: 0;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
 }
 .remainingCard:nth-child(1) {
   transform: rotate(-8deg) translate(-8px, 4px);
@@ -297,11 +332,14 @@
   background: rgba(10, 8, 22, 0.85);
   border: 1px solid rgba(201, 168, 76, 0.4);
   border-radius: 999px;
-  font-family: "Cinzel", "Playfair Display", serif;
-  font-size: 13px;
-  letter-spacing: 0.2em;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
+  letter-spacing: 0.06em;
+  line-height: 1.35;
   color: rgba(212, 178, 84, 0.95);
-  white-space: nowrap;
+  max-width: calc(100vw - 28px);
+  text-align: center;
+  overflow-wrap: anywhere;
   animation:
     bannerAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
     bannerGlow 2.4s ease-in-out 0.6s infinite;

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <path id="arcText0" d="M 250 17 A 233 233 0 0 1 366.5 48.22" fill="none"/>
+    <path id="arcText1" d="M 366.5 48.22 A 233 233 0 0 1 451.78 133.5" fill="none"/>
+    <path id="arcText2" d="M 451.78 133.5 A 233 233 0 0 1 483 250" fill="none"/>
+    <path id="arcText3" d="M 483 250 A 233 233 0 0 1 451.78 366.5" fill="none"/>
+    <path id="arcText4" d="M 451.78 366.5 A 233 233 0 0 1 366.5 451.78" fill="none"/>
+    <path id="arcText5" d="M 366.5 451.78 A 233 233 0 0 1 250 483" fill="none"/>
+    <path id="arcText6" d="M 250 483 A 233 233 0 0 1 133.5 451.78" fill="none"/>
+    <path id="arcText7" d="M 133.5 451.78 A 233 233 0 0 1 48.22 366.5" fill="none"/>
+    <path id="arcText8" d="M 48.22 366.5 A 233 233 0 0 1 17 250" fill="none"/>
+    <path id="arcText9" d="M 17 250 A 233 233 0 0 1 48.22 133.5" fill="none"/>
+    <path id="arcText10" d="M 48.22 133.5 A 233 233 0 0 1 133.5 48.22" fill="none"/>
+    <path id="arcText11" d="M 133.5 48.22 A 233 233 0 0 1 250 17" fill="none"/>
+  </defs>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText0" startOffset="50%" text-anchor="middle">ARIES</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText1" startOffset="50%" text-anchor="middle">TAURUS</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText2" startOffset="50%" text-anchor="middle">GEMINI</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText3" startOffset="50%" text-anchor="middle">CANCER</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText4" startOffset="50%" text-anchor="middle">LEO</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText5" startOffset="50%" text-anchor="middle">VIRGO</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText6" startOffset="50%" text-anchor="middle">LIBRA</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText7" startOffset="50%" text-anchor="middle">SCORPIO</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText8" startOffset="50%" text-anchor="middle">SAGITTARIUS</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText9" startOffset="50%" text-anchor="middle">CAPRICORN</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText10" startOffset="50%" text-anchor="middle">AQUARIUS</textPath>
+  </text>
+  <text font-size="11" fill="#E8C862" font-family="Cinzel, Della Respira, Georgia, serif" font-weight="500" letter-spacing="0.22em">
+    <textPath href="#arcText11" startOffset="50%" text-anchor="middle">PISCES</textPath>
+  </text>
+</svg>

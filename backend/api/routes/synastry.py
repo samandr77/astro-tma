@@ -413,6 +413,11 @@ async def accept_request(
     if initiator_chart is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Заполните данные рождения в профиле")
 
+    from services.ratelimit import LIMITS, enforce_monthly_limit
+    await enforce_monthly_limit(
+        partner.id, "synastry_calc", LIMITS["synastry_calc"], feature_ru="расчёты синастрии",
+    )
+
     initiator_tz = await _resolve_synastry_timezone(
         initiator.birth_tz,
         initiator.birth_lat,
@@ -504,6 +509,11 @@ async def manual_synastry(
 
     if not await user_repo.has_purchased(db, initiator.id, "synastry"):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "Покупка Синастрии обязательна")
+
+    from services.ratelimit import LIMITS, enforce_monthly_limit
+    await enforce_monthly_limit(
+        initiator.id, "synastry_calc", LIMITS["synastry_calc"], feature_ru="расчёты синастрии",
+    )
 
     # Combine birth_date + birth_time into a single datetime
     try:

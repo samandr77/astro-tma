@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <circle cx="250" cy="250" r="244" fill="none" stroke="#C4A35A" stroke-width="1.4" opacity="0.85"/>
+  <circle cx="250" cy="250" r="222" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <circle cx="250" cy="250" r="218" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <circle cx="250" cy="250" r="165" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <circle cx="250" cy="250" r="160" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <circle cx="250" cy="250" r="118" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <circle cx="250" cy="250" r="113" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <circle cx="250" cy="250" r="82" fill="none" stroke="#C4A35A" stroke-width="1" opacity="0.65"/>
+  <line x1="250" y1="168" x2="250" y2="6" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="291" y1="178.99" x2="372" y2="38.69" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="321.01" y1="209" x2="461.31" y2="128" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="332" y1="250" x2="494" y2="250" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="321.01" y1="291" x2="461.31" y2="372" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="291" y1="321.01" x2="372" y2="461.31" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="250" y1="332" x2="250" y2="494" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="209" y1="321.01" x2="128" y2="461.31" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="178.99" y1="291" x2="38.69" y2="372" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="168" y1="250" x2="6" y2="250" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="178.99" y1="209" x2="38.69" y2="128" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+  <line x1="209" y1="178.99" x2="128" y2="38.69" stroke="#8B6B3A" stroke-width="0.8" opacity="0.55"/>
+</svg>

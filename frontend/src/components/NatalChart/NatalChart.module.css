@@ -116,6 +116,27 @@
   stroke-width: 0.7px;
 }
 
+.referenceSvgSymbol,
+.referencePlanetSymbol,
+.referenceCenterSymbol {
+  color: var(--natal-accent);
+  filter: drop-shadow(0 0 3px rgba(217, 185, 90, 0.22));
+  pointer-events: none;
+}
+
+.referenceSvgSymbol {
+  opacity: 0.95;
+}
+
+.referencePlanetSymbol {
+  opacity: 0.86;
+}
+
+.referenceCenterSymbol {
+  opacity: 0.98;
+  filter: drop-shadow(0 0 5px rgba(217, 185, 90, 0.32));
+}
+
 .posterLabelText {
   font-family: var(--natal-font-display);
   font-weight: 700;

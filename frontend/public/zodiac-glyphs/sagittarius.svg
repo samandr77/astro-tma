@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="0.6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(10,10) scale(7.5)">
+    <polygon id="Shaft" fill="#E8C862" points="2 19.7785 3.414 21.1925 20.385 4.2215 18.97 2.8075"></polygon>
+    <polygon id="Cross" fill="#E8C862" points="14.0208 16.2426 6.9498 9.1716 8.3638 7.7576 15.4348 14.8286"></polygon>
+    <polygon id="Arrow" fill="#E8C862" points="11.1926 1.9999 11.1926 3.9999 19.1926 3.9999 19.1926 11.9999 21.1926 11.9999 21.1926 1.9999"></polygon>
+  </g>
+</svg>

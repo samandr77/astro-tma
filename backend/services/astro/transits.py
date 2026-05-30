@@ -3,7 +3,7 @@ Daily transit calculation — current sky vs natal chart.
 Used to personalise horoscopes beyond generic sun-sign text.
 """
 
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from kerykeion import AstrologicalSubjectFactory, SynastryAspects

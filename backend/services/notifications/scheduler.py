@@ -12,6 +12,7 @@ from core.settings import settings
 from db.database import AsyncSessionLocal
 from db.models import NotificationLog, NotificationStatus, NotificationType, User
 from services.notifications.push import (
+    DAILY_OPEN_APP_LABEL,
     build_daily_message,
     build_open_app_markup,
     send_message,
@@ -95,7 +96,7 @@ async def send_daily_pushes() -> None:
                 user,
                 text,
                 type_=NotificationType.DAILY_HOROSCOPE,
-                reply_markup=build_open_app_markup("✦ Читать далее"),
+                reply_markup=build_open_app_markup(DAILY_OPEN_APP_LABEL),
             )
             if ok:
                 sent += 1

@@ -1,6 +1,39 @@
-import { useEffect } from "react";
+import { Fragment, useEffect, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import styles from "./Natal.module.css";
+
+/**
+ * Render the sheet body with **markdown bold** support and preserved
+ * line breaks. Body is split on blank lines into paragraphs, each line
+ * inside a paragraph becomes its own line, and `**text**` segments are
+ * wrapped in <strong>. This is what makes per-aspect headings like
+ * "Солнце ☌ Меркурий · орб 8.0°" stand out from the prose below them.
+ */
+function renderBoldInline(line: string): ReactNode[] {
+  // Split on **...** preserving the inside captures
+  const parts = line.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className={styles.descSheetHeading}>{part}</strong>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    ),
+  );
+}
+
+function renderBody(body: string): ReactNode {
+  const paragraphs = body.split(/\n{2,}/);
+  return paragraphs.map((para, pi) => (
+    <p key={pi}>
+      {para.split("\n").map((line, li) => (
+        <Fragment key={li}>
+          {li > 0 && <br />}
+          {renderBoldInline(line)}
+        </Fragment>
+      ))}
+    </p>
+  ));
+}
 
 export type NatalDescriptionSheetProps = {
   open: boolean;
@@ -82,7 +115,7 @@ export function NatalDescriptionSheet({
                   Готовим описание…
                 </span>
               ) : body ? (
-                <p>{body}</p>
+                renderBody(body)
               ) : (
                 <span className={styles.descSheetLoader}>
                   Описание скоро появится.

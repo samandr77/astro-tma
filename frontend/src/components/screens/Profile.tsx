@@ -119,6 +119,53 @@ function BirthDateInput({
   );
 }
 
+function PurchasesCard() {
+  const { setScreen } = useAppStore();
+  const { impact } = useHaptic();
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-purchases"],
+    queryFn: usersApi.getPurchases,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  if (isLoading) return null;
+  const purchases = data?.purchases ?? [];
+  const active = data?.active_subscription ?? null;
+  const totalCount = purchases.length + (active ? 1 : 0);
+  if (totalCount === 0) return null;
+
+  const previewLabel = active
+    ? "Премиум-подписка активна"
+    : `${totalCount} ${
+        totalCount === 1
+          ? "покупка"
+          : totalCount < 5
+            ? "покупки"
+            : "покупок"
+      }`;
+
+  return (
+    <motion.button
+      type="button"
+      className="premium-status-card purchases-card-button"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.11 }}
+      onClick={() => {
+        impact("light");
+        setScreen("purchases");
+      }}
+    >
+      <span className="premium-status-card__star" aria-hidden="true">✦</span>
+      <span className="premium-status-card__main">
+        <span className="premium-status-card__title">Мои покупки</span>
+        <span className="premium-status-card__desc">{previewLabel}</span>
+      </span>
+      <span className="premium-status-card__arrow" aria-hidden="true">›</span>
+    </motion.button>
+  );
+}
+
 export function Profile() {
   const { user, setUser } = useAppStore();
   const { impact, notification } = useHaptic();
@@ -315,27 +362,31 @@ export function Profile() {
           )}
         </motion.div>
 
-        {/* Premium status card */}
-        {user?.is_premium && (
-          <motion.button
-            type="button"
-            className="premium-status-card"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            onClick={() => {
-              impact("light");
-              useAppStore.getState().setScreen("premium");
-            }}
-          >
-            <span className="premium-status-card__star" aria-hidden="true">★</span>
-            <span className="premium-status-card__main">
-              <span className="premium-status-card__title">Премиум-доступ</span>
-              <span className="premium-status-card__desc">Активен</span>
+        {/* Premium status card — active or upsell */}
+        <motion.button
+          type="button"
+          className={`premium-status-card ${user?.is_premium ? "" : "premium-status-card--upsell"}`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={() => {
+            impact("light");
+            useAppStore.getState().setScreen("premium");
+          }}
+        >
+          <span className="premium-status-card__star" aria-hidden="true">★</span>
+          <span className="premium-status-card__main">
+            <span className="premium-status-card__title">
+              {user?.is_premium ? "Премиум-доступ" : "Открыть Premium"}
             </span>
-            <span className="premium-status-card__arrow" aria-hidden="true">›</span>
-          </motion.button>
-        )}
+            <span className="premium-status-card__desc">
+              {user?.is_premium
+                ? "Активен"
+                : "Все интерпретации, прогнозы и Таро · от 199 ⭐ / мес"}
+            </span>
+          </span>
+          <span className="premium-status-card__arrow" aria-hidden="true">›</span>
+        </motion.button>
 
         {/* Birth data section */}
         <motion.div
@@ -544,6 +595,29 @@ export function Profile() {
             </div>
           )}
         </motion.div>
+
+        <PurchasesCard />
+
+        <motion.button
+          type="button"
+          className="profile-cta-card"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.115 }}
+          onClick={() => {
+            impact("light");
+            useAppStore.getState().setScreen("referral");
+          }}
+        >
+          <span className="profile-cta-card__icon" aria-hidden="true">✦</span>
+          <span className="profile-cta-card__col">
+            <span className="profile-cta-card__title">Пригласить друзей</span>
+            <span className="profile-cta-card__desc">
+              Когда друг купит — получите 14 дней Premium
+            </span>
+          </span>
+          <span className="profile-cta-card__chev" aria-hidden="true">›</span>
+        </motion.button>
 
         <motion.div
           className="natal-card"

@@ -309,6 +309,12 @@ async def get_transit_details_endpoint(
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
+    from services.ratelimit import LIMITS, enforce_monthly_limit
+    await enforce_monthly_limit(
+        user.id, "transit_details", LIMITS["transit_details"],
+        feature_ru="разборы транзитов",
+    )
+
     chart = user.natal_chart.chart_data if user.natal_chart else None
 
     details = await get_transit_details(
@@ -421,10 +427,15 @@ async def get_week_events(
     tg_user: dict = Depends(get_tg_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Top transit events for the next 7 days — aspect peaks + sign ingresses."""
+    """Top transit events for the next 7 days — Premium-only."""
     user = await user_repo.get_by_id(db, tg_user["id"])
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if not await user_repo.is_premium(db, user.id):
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "Прогноз транзитов на неделю доступен только в Premium-подписке.",
+        )
     if not user.natal_chart or not user.birth_date or not user.birth_tz:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -463,10 +474,15 @@ async def get_month_events(
     tg_user: dict = Depends(get_tg_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Top transit events for the next 30 days — aspect peaks + ingresses."""
+    """Top transit events for the next 30 days — Premium-only."""
     user = await user_repo.get_by_id(db, tg_user["id"])
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if not await user_repo.is_premium(db, user.id):
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "Прогноз транзитов на месяц доступен только в Premium-подписке.",
+        )
     if not user.natal_chart or not user.birth_date or not user.birth_tz:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,

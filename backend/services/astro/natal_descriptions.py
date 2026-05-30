@@ -137,14 +137,15 @@ def _build_planets_prompt(planets: dict[str, dict[str, Any]]) -> str:
     count = len(rows)
     return f"""Ты — опытный астролог, пишешь персональные интерпретации натальной карты на русском языке.
 
+Раздел PDF: «Планеты в знаках».
 Положения планет ({count} штук):
 {chr(10).join(rows)}
 
 Для КАЖДОЙ из перечисленных планет напиши:
-- "short" — содержательное описание (4-5 предложений, ~80-120 слов): что эта планета в данном знаке и доме означает для человека — характер, проявления в жизни, на что обратить внимание.
-- "full" — полное описание (6-9 предложений, ~150-220 слов) в стиле классических астрологических справочников: характер, мотивации, сильные стороны, потенциальные сложности; разверни тему дома — на какую сферу жизни это влияет, как именно проявляется.
+- "short" — содержательное описание (4-5 предложений, ~80-120 слов): что эта планета в данном знаке означает для человека — характер, проявления в жизни, на что обратить внимание; дом упомяни только одним прикладным штрихом.
+- "full" — полное описание (4-6 абзацев, ~450-650 слов) в стиле классических астрологических справочников: центр разбора — связка планета + знак; раскрой характер, мотивации, сильные стороны, потенциальные сложности, отношения, работу/дела и бытовые проявления. Дом используй только в финальном абзаце как персональное уточнение, не делай его главной темой.
 
-Пиши тепло, конкретно, от второго лица («вы»). Без markdown, без заголовков, без списков. Только обычные предложения.
+Пиши тепло, конкретно, от второго лица («вы»). Без рекламы, markdown, заголовков и списков. Только обычные предложения и абзацы внутри строк.
 
 Вызови инструмент submit_planet_descriptions РОВНО ОДИН РАЗ. В одном вызове укажи КАЖДУЮ из {count} планет как отдельный ключ верхнего уровня (например, "sun", "moon", "mercury", … "pluto"); значение каждого ключа — это объект с двумя полями short и full. Не пропускай ни одну планету."""
 
@@ -325,13 +326,14 @@ def _planet_one_prompt(key: str, planet: dict[str, Any]) -> str:
     sign_ru = _normalise_sign(planet.get("sign_ru") or planet.get("sign"))
     house = planet.get("house", "?")
     retro = " (ретроградный)" if planet.get("retrograde") else ""
-    return f"""Ты пишешь персональный разбор натальной карты для популярного приложения. Читатель — обычный человек, не астролог.
+    return f"""Ты пишешь раздел PDF «Планеты в знаках» для популярного приложения с натальными картами. Читатель — обычный человек, не астролог.
 
 Планета: {_PLANET_RU.get(key, key)} в знаке {sign_ru}, {house}-й дом{retro}.
+Важно: центр разбора — связка планета + знак. Дом используй только как короткое персональное уточнение ближе к концу, не смешивай весь текст с темой дома.
 
 Вызови инструмент submit_entry с двумя полями:
-- "short" (4-5 предложений, ~80-120 слов): что эта планета в данном знаке и доме значит для человека — как проявляется в характере и в жизни, на что обратить внимание.
-- "full" (6-9 предложений, ~150-220 слов): тот же разбор подробнее — характер, мотивации, что даётся легко, где приходится работать; обязательно разверни тему дома (какая сфера жизни активируется).
+- "short" (4-5 предложений, ~80-120 слов): что эта планета в данном знаке значит для человека — как проявляется в характере и в жизни, на что обратить внимание; дом упомяни только одним прикладным штрихом.
+- "full" (4-6 абзацев, ~450-650 слов): развёрнутый справочный текст как в классическом описании «планета в знаке»: характер, мотивации, сильные стороны, уязвимости, отношения, работа/дела, привычки и бытовые проявления. Пиши цельно и подробно; дом добавь только в финальном абзаце как персональный акцент.
 
 {_STYLE_BRIEF}"""
 
@@ -397,77 +399,191 @@ async def _one_entry(
     return {"short": "", "full": ""}
 
 
+def _chunked(items: list[Any], n: int) -> list[list[Any]]:
+    """Split a list into fixed-size chunks (last chunk may be shorter)."""
+    return [items[i : i + n] for i in range(0, len(items), n)]
+
+
+async def _call_tool_chunk(
+    client: Any,
+    prompt: str,
+    tool_name: str,
+    keys: list[str],
+    max_tokens: int,
+    sem: asyncio.Semaphore,
+) -> dict[str, dict[str, str]]:
+    """Single batched LLM call → flat {key → {short, full}} dict. Retries
+    once on 429. Returns empty dict on permanent failure."""
+    schema = {
+        "type": "object",
+        "properties": {k: _entry_schema() for k in keys},
+        "required": keys,
+    }
+    for attempt in range(2):
+        async with sem:
+            try:
+                result = await _call_tool(
+                    client, prompt, tool_name, schema, max_tokens,
+                )
+                if not isinstance(result, dict):
+                    return {}
+                out: dict[str, dict[str, str]] = {}
+                for k, v in result.items():
+                    if isinstance(v, dict):
+                        out[str(k)] = {
+                            "short": str(v.get("short", "")),
+                            "full": str(v.get("full", "")),
+                        }
+                return out
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                is_rate_limit = "429" in msg or "rate_limit" in msg.lower()
+                if is_rate_limit and attempt == 0:
+                    log.info("natal_descriptions.batch_rate_limit_retry")
+                    await asyncio.sleep(20)
+                    continue
+                log.warning(
+                    "natal_descriptions.batch_failed",
+                    tool=tool_name, keys=keys, error=msg[:200],
+                )
+                return {}
+    return {}
+
+
+# Per-chunk cap of items in a single LLM call. 5 keeps Haiku's schema
+# adherence reliable while still cutting the per-chart call count from
+# ~30 individual calls down to ~6 batches.
+_BATCH_SIZE = 5
+# Output budget per batch — ~5 entries × (~120-word short + ~500-word full)
+# ≈ 4600 tokens. 6144 gives a comfortable safety margin so the model
+# doesn't truncate mid-entry.
+_BATCH_MAX_TOKENS = 6144
+
+
 async def generate_natal_descriptions(
     planets: dict[str, dict[str, Any]],
     houses: list[dict[str, Any]],
     aspects: list[dict[str, Any]],
     api_key: str,
 ) -> dict[str, Any]:
-    """Per-item LLM generation — one tool call per planet/house/aspect, all
-    fired in parallel. Reliable (Haiku follows a small schema correctly),
-    cached forever per chart so the cost is paid once. Total ~30 calls for
-    a typical chart, ~30s in wall time when run in parallel."""
+    """Batched LLM generation: each tool call covers up to 5 items at once,
+    cutting the per-chart call count from ~30 to ~6 (and the cost
+    proportionally). Reliable for Haiku — 5 keys is well within its schema
+    adherence window. Cached forever per chart so the cost is paid once."""
     import anthropic
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
     # Anthropic free-tier rate limit is 50 RPM with low concurrent-conn cap.
-    # 5 in flight keeps us comfortably under both.
-    sem = asyncio.Semaphore(5)
+    # 3 in flight is plenty for 6-7 batched calls and keeps us under both.
+    sem = asyncio.Semaphore(3)
 
+    # ── Planets ─────────────────────────────────────────────────────────
     planet_items = [(k, p) for k in _PLANET_ORDER if (p := planets.get(k))]
-    planet_tasks = [_one_entry(client, _planet_one_prompt(k, p), sem) for k, p in planet_items]
+    planet_chunks = _chunked(planet_items, _BATCH_SIZE)
+    planet_tasks = []
+    for chunk in planet_chunks:
+        chunk_dict = dict(chunk)
+        prompt = _build_planets_prompt(chunk_dict)
+        keys = [k for k, _ in chunk]
+        planet_tasks.append(
+            _call_tool_chunk(
+                client, prompt, "submit_planet_descriptions",
+                keys, _BATCH_MAX_TOKENS, sem,
+            )
+        )
 
-    house_items: list[tuple[int, str]] = []
+    # ── Houses ──────────────────────────────────────────────────────────
+    house_items: list[dict[str, Any]] = []
     for h in houses:
         num = h.get("number")
         if not num:
             continue
-        sign_ru = _normalise_sign(h.get("sign_ru") or h.get("sign"))
-        house_items.append((int(num), sign_ru))
-    house_tasks = [_one_entry(client, _house_one_prompt(n, s), sem) for n, s in house_items]
+        house_items.append({
+            "number": int(num),
+            "sign_ru": _normalise_sign(h.get("sign_ru") or h.get("sign")),
+        })
+    house_chunks = _chunked(house_items, _BATCH_SIZE)
+    house_tasks = []
+    for chunk in house_chunks:
+        prompt = _build_houses_prompt(chunk)
+        keys = [str(h["number"]) for h in chunk]
+        house_tasks.append(
+            _call_tool_chunk(
+                client, prompt, "submit_house_descriptions",
+                keys, _BATCH_MAX_TOKENS, sem,
+            )
+        )
 
-    aspect_items: list[tuple[str, str, str]] = []
+    # ── Aspects ─────────────────────────────────────────────────────────
+    aspect_items: list[dict[str, Any]] = []
+    aspect_ids_lookup: dict[str, tuple[str, str, str]] = {}
     for a in aspects:
         p1 = (a.get("p1") or "").lower()
         p2 = (a.get("p2") or "").lower()
         atype = (a.get("aspect") or "").lower()
-        if (
+        if not (
             p1 and p2 and atype
             and p1 in _PLANET_RU and p2 in _PLANET_RU
             and atype in _ASPECT_RU
         ):
-            aspect_items.append((p1, p2, atype))
-    aspect_tasks = [_one_entry(client, _aspect_one_prompt(p1, p2, t), sem) for p1, p2, t in aspect_items]
+            continue
+        aid = f"{p1}_{p2}_{atype}"
+        aspect_items.append({
+            "p1": p1, "p2": p2, "aspect": atype, "orb": a.get("orb", 0),
+        })
+        aspect_ids_lookup[aid] = (p1, p2, atype)
+    aspect_chunks = _chunked(aspect_items, _BATCH_SIZE)
+    aspect_tasks = []
+    for chunk in aspect_chunks:
+        prompt, chunk_ids = _build_aspects_prompt(chunk)
+        if not chunk_ids:
+            continue
+        aspect_tasks.append(
+            _call_tool_chunk(
+                client, prompt, "submit_aspect_descriptions",
+                chunk_ids, _BATCH_MAX_TOKENS, sem,
+            )
+        )
 
-    all_tasks = planet_tasks + house_tasks + aspect_tasks
-    results = await asyncio.gather(*all_tasks, return_exceptions=False)
+    # Fire everything in parallel — semaphore caps actual concurrency.
+    all_results = await asyncio.gather(
+        *planet_tasks, *house_tasks, *aspect_tasks, return_exceptions=False,
+    )
 
-    p_count = len(planet_tasks)
-    h_count = len(house_tasks)
-    planet_results = results[:p_count]
-    house_results = results[p_count : p_count + h_count]
-    aspect_results = results[p_count + h_count :]
+    p_n = len(planet_tasks)
+    h_n = len(house_tasks)
+    planet_results = all_results[:p_n]
+    house_results = all_results[p_n : p_n + h_n]
+    aspect_results = all_results[p_n + h_n :]
 
     out: dict[str, Any] = {"planets": {}, "houses": {}, "aspects": []}
 
-    for (key, _), entry in zip(planet_items, planet_results):
-        if entry.get("short") or entry.get("full"):
-            out["planets"][key] = entry
+    for chunk_dict in planet_results:
+        for key, entry in chunk_dict.items():
+            if entry.get("short") or entry.get("full"):
+                out["planets"][key] = entry
 
-    for (num, _), entry in zip(house_items, house_results):
-        if entry.get("short") or entry.get("full"):
-            out["houses"][str(num)] = entry
+    for chunk_dict in house_results:
+        for key, entry in chunk_dict.items():
+            if entry.get("short") or entry.get("full"):
+                out["houses"][key] = entry
 
-    for (p1, p2, atype), entry in zip(aspect_items, aspect_results):
-        if entry.get("short") or entry.get("full"):
-            out["aspects"].append(
-                {"p1": p1, "p2": p2, "type": atype, **entry}
-            )
+    for chunk_dict in aspect_results:
+        for aid, entry in chunk_dict.items():
+            triple = aspect_ids_lookup.get(aid)
+            if not triple:
+                continue
+            if entry.get("short") or entry.get("full"):
+                p1, p2, atype = triple
+                out["aspects"].append(
+                    {"p1": p1, "p2": p2, "type": atype, **entry}
+                )
 
     log.info(
         "natal_descriptions.done",
         planets=len(out["planets"]),
         houses=len(out["houses"]),
         aspects=len(out["aspects"]),
+        batches=len(planet_tasks) + len(house_tasks) + len(aspect_tasks),
     )
     return out

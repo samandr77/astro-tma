@@ -79,6 +79,7 @@ const FALLBACK_PLANET: PlanetPosition = {
   minute: 0,
   house: 1,
   retrograde: false,
+  hidden: true,
 }
 
 export function toNatalChartData(

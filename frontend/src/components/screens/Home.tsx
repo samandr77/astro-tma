@@ -1,16 +1,45 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EnergyBars } from "@/components/ui/EnergyBars";
-import { PremiumGate } from "@/components/ui/PremiumGate";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { HoroscopeSkeleton, MoonCardSkeleton } from "@/components/ui/Skeleton";
 import { MeaningText } from "@/components/ui/MeaningText";
 import { HeaderAvatarButton } from "@/components/ui/HeaderAvatarButton";
+import { EntitlementBadge } from "@/components/ui/EntitlementBadge";
 import { horoscopeApi, tarotApi } from "@/services/api";
 import { useAppStore } from "@/stores/app";
 import { useHaptic } from "@/hooks/useTelegram";
-import { ZODIAC_SIGNS } from "@/types";
+import { ZODIAC_SIGNS, type TarotSpreadResponse } from "@/types";
+import { ZodiacIcon } from "@/components/ui/ZodiacIcon";
+
+const DAILY_CARD_STORAGE_KEY = "tarot-daily-state";
+
+function getTodayKey(): string {
+  return new Date().toLocaleDateString("en-CA");
+}
+
+type StoredDailyCard = {
+  date: string;
+  response: TarotSpreadResponse;
+};
+
+function readStoredDailyCard(): StoredDailyCard | null {
+  try {
+    const raw = localStorage.getItem(DAILY_CARD_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredDailyCard;
+    if (!parsed?.date || !parsed.response?.cards?.length) return null;
+    if (parsed.date !== getTodayKey()) {
+      localStorage.removeItem(DAILY_CARD_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    localStorage.removeItem(DAILY_CARD_STORAGE_KEY);
+    return null;
+  }
+}
 
 const POWER_EMOJIS: Record<string, string[]> = {
   aries: ["🔥", "⚡", "🗡️", "🏆", "🚀", "💥"],
@@ -45,20 +74,26 @@ const PERIOD_LABELS: Record<Period, string> = {
   week: "Неделя",
   month: "Месяц",
 };
-const PERIOD_PRODUCTS: Record<
-  Exclude<Period, "today">,
-  { id: string; stars: number }
-> = {
-  tomorrow: { id: "horoscope_tomorrow", stars: 25 },
-  week: { id: "horoscope_week", stars: 50 },
-  month: { id: "horoscope_month", stars: 75 },
-};
-
 export function Home() {
   const { user, setScreen } = useAppStore();
   const { impact } = useHaptic();
+  const queryClient = useQueryClient();
   const [period, setPeriod] = useState<Period>("today");
-  const [cardRevealed, setCardRevealed] = useState(false);
+
+  const storedDailyRef = useRef<StoredDailyCard | null>(null);
+  if (storedDailyRef.current === null && typeof window !== "undefined") {
+    storedDailyRef.current = readStoredDailyCard();
+  }
+  const [cardRevealed, setCardRevealed] = useState(
+    () => storedDailyRef.current !== null,
+  );
+
+  useEffect(() => {
+    const stored = storedDailyRef.current;
+    if (stored) {
+      queryClient.setQueryData(["tarot-daily"], stored.response);
+    }
+  }, [queryClient]);
 
   const signInfo = ZODIAC_SIGNS.find((s) => s.value === user?.sun_sign);
 
@@ -89,6 +124,19 @@ export function Home() {
     enabled: cardRevealed,
     staleTime: 1000 * 60 * 60 * 12,
   });
+
+  useEffect(() => {
+    if (!dailyCard?.cards?.length) return;
+    try {
+      const payload: StoredDailyCard = {
+        date: getTodayKey(),
+        response: dailyCard,
+      };
+      localStorage.setItem(DAILY_CARD_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // localStorage может быть недоступен — игнорируем
+    }
+  }, [dailyCard]);
 
   // Re-tick the clock every minute so the greeting flips at 5/12/17/23
   // even if the user keeps the home screen open across boundaries.
@@ -124,7 +172,10 @@ export function Home() {
           </h1>
           <p className="screen-date">{today}</p>
         </div>
-        <HeaderAvatarButton />
+        <div className="home-header__right">
+          <EntitlementBadge />
+          <HeaderAvatarButton />
+        </div>
       </div>
 
       {/* Period tabs */}
@@ -139,22 +190,6 @@ export function Home() {
             }}
           >
             {PERIOD_LABELS[p]}
-            {p !== "today" && !user?.is_premium && (
-              <svg
-                className="period-tab__lock"
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="1.5" y="4.5" width="7" height="5" rx="1" />
-                <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" />
-              </svg>
-            )}
           </button>
         ))}
       </div>
@@ -172,7 +207,13 @@ export function Home() {
           >
             <div className="card-tag">✦ Гороскоп на сегодня</div>
             <div className="card-sign-row">
-              <div className="sign-badge">{signInfo?.emoji ?? "✦"}</div>
+              <div className="sign-badge">
+                {signInfo ? (
+                  <ZodiacIcon sign={signInfo.value} size={32} />
+                ) : (
+                  "✦"
+                )}
+              </div>
               <div>
                 <div className="sign-name">{signInfo?.label ?? "Ваш знак"}</div>
                 <div className="sign-dates">{signInfo?.dates}</div>
@@ -188,22 +229,15 @@ export function Home() {
             </div>
           </motion.div>
         ) : (
-          <PremiumGate
-            locked={!user?.is_premium}
-            productId={PERIOD_PRODUCTS[period as Exclude<Period, "today">].id}
-            productName={`Гороскоп — ${PERIOD_LABELS[period]}`}
-            stars={PERIOD_PRODUCTS[period as Exclude<Period, "today">].stars}
+          <motion.div
+            key={period}
+            className="horoscope-card glass-gold"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <motion.div
-              key={period}
-              className="horoscope-card glass-gold"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="card-tag">✦ {PERIOD_LABELS[period]}</div>
-              <p className="horoscope-text">{horoscope?.text_ru}</p>
-            </motion.div>
-          </PremiumGate>
+            <div className="card-tag">✦ {PERIOD_LABELS[period]}</div>
+            <p className="horoscope-text">{horoscope?.text_ru}</p>
+          </motion.div>
         )}
 
         {/* Moon card + Tarot daily — only on "today" tab. For tomorrow/week/month
@@ -258,7 +292,16 @@ export function Home() {
                 }}
               >
                 Смотреть все
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M4 2l4 4-4 4" />
                 </svg>
               </button>
@@ -273,8 +316,13 @@ export function Home() {
                     setScreen("horoscopes");
                   }}
                 >
-                  <span className="zodiac-scroll__symbol">{s.emoji}</span>
-                  <span className="zodiac-scroll__constellation" aria-hidden="true">
+                  <span className="zodiac-scroll__symbol">
+                    <ZodiacIcon sign={s.value} size={26} />
+                  </span>
+                  <span
+                    className="zodiac-scroll__constellation"
+                    aria-hidden="true"
+                  >
                     ✦ &nbsp;✦&nbsp; ✧ &nbsp;✦
                   </span>
                   <span className="zodiac-scroll__name">{s.label}</span>
@@ -295,10 +343,14 @@ export function Home() {
                 setScreen("moon");
               }}
             >
-              <span className="home-tile__emoji" aria-hidden="true">🌙</span>
+              <span className="home-tile__emoji" aria-hidden="true">
+                🌙
+              </span>
               <span className="home-tile__title">Лунный календарь</span>
               <span className="home-tile__desc">Фазы Луны и влияние дней</span>
-              <span className="home-tile__arrow" aria-hidden="true">›</span>
+              <span className="home-tile__arrow" aria-hidden="true">
+                ›
+              </span>
             </button>
             <button
               className="home-tile"
@@ -307,10 +359,16 @@ export function Home() {
                 setScreen("natal");
               }}
             >
-              <span className="home-tile__emoji" aria-hidden="true">✦</span>
+              <span className="home-tile__emoji" aria-hidden="true">
+                ✦
+              </span>
               <span className="home-tile__title">Натальная карта</span>
-              <span className="home-tile__desc">Расшифровка вашей карты рождения</span>
-              <span className="home-tile__arrow" aria-hidden="true">›</span>
+              <span className="home-tile__desc">
+                Расшифровка вашей карты рождения
+              </span>
+              <span className="home-tile__arrow" aria-hidden="true">
+                ›
+              </span>
             </button>
             <button
               className="home-tile"
@@ -319,10 +377,14 @@ export function Home() {
                 setScreen("synastry_invite");
               }}
             >
-              <span className="home-tile__emoji" aria-hidden="true">♥</span>
+              <span className="home-tile__emoji" aria-hidden="true">
+                ♥
+              </span>
               <span className="home-tile__title">Совместимость</span>
               <span className="home-tile__desc">Сравните два знака</span>
-              <span className="home-tile__arrow" aria-hidden="true">›</span>
+              <span className="home-tile__arrow" aria-hidden="true">
+                ›
+              </span>
             </button>
             <button
               className="home-tile"
@@ -331,128 +393,157 @@ export function Home() {
                 setScreen("tarot");
               }}
             >
-              <span className="home-tile__emoji" aria-hidden="true">🎴</span>
+              <span className="home-tile__emoji" aria-hidden="true">
+                🎴
+              </span>
               <span className="home-tile__title">Таро</span>
               <span className="home-tile__desc">Расклады и совет дня</span>
-              <span className="home-tile__arrow" aria-hidden="true">›</span>
+              <span className="home-tile__arrow" aria-hidden="true">
+                ›
+              </span>
             </button>
           </section>
         )}
 
         {/* Tarot card of the day */}
         {period === "today" && (
-        <motion.div
-          className="tarot-day-card"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.14 }}
-        >
-          <div className="card-tag">✦ Карта таро на сегодня</div>
-          <div className="tarot-flip">
-            <motion.div
-              key={cardRevealed ? "front" : "back"}
-              className={`tarot-flip__inner ${
-                cardRevealed ? "tarot-flip__inner--revealed" : ""
-              }`}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.28, ease: "easeOut" }}
-            >
-              {!cardRevealed ? (
-                <button
-                  type="button"
-                  className="tarot-flip__face tarot-flip__face--back"
-                  onClick={() => {
-                    impact("medium");
-                    setCardRevealed(true);
-                  }}
-                >
-                  <div className="tarot-flip__back-ornament" aria-hidden="true">
-                    ✦
-                  </div>
-                  <span className="tarot-flip__hint">Нажмите, чтобы открыть</span>
-                  <span className="tarot-flip__free">Бесплатно</span>
-                </button>
-              ) : (
-                <div className="tarot-flip__face tarot-flip__face--front">
-                  {cardLoading || cardFetching ? (
-                    <div className="tarot-flip__loading">
-                      <LoadingSpinner message="Карты открываются..." />
-                    </div>
-                  ) : cardError ? (
-                    <div className="tarot-flip__empty">
-                      <p className="tarot-flip__empty-title">Не удалось открыть карту</p>
+          <motion.div
+            className="tarot-day-card"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.14 }}
+          >
+            <div className="card-tag">✦ Карта таро на сегодня</div>
+            <div className="tarot-day-card__split">
+              <div className="tarot-day-card__visual">
+                <div className="tarot-flip">
+                  <motion.div
+                    key={cardRevealed ? "front" : "back"}
+                    className={`tarot-flip__inner ${
+                      cardRevealed ? "tarot-flip__inner--revealed" : ""
+                    }`}
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.28, ease: "easeOut" }}
+                  >
+                    {!cardRevealed ? (
                       <button
                         type="button"
-                        className="tarot-flip__retry"
+                        className="tarot-flip__face tarot-flip__face--back"
                         onClick={() => {
-                          impact("light");
-                          void refetchDailyCard();
+                          impact("medium");
+                          setCardRevealed(true);
                         }}
-                      >
-                        Повторить
-                      </button>
-                    </div>
-                  ) : openedDailyCard ? (
-                    <>
-                      <div className="tarot-flip__img-wrap">
-                        {openedDailyCard.image_url ? (
-                          <img
-                            src={openedDailyCard.image_url}
-                            alt={openedDailyCard.name_ru}
-                            className="tarot-flip__img"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="tarot-flip__img-fallback">
-                            {openedDailyCard.emoji}
+                        aria-label="Открыть карту дня"
+                      />
+                    ) : (
+                      <div className="tarot-flip__face tarot-flip__face--front">
+                        {cardLoading || cardFetching ? (
+                          <div className="tarot-flip__loading">
+                            <LoadingSpinner message="Карты открываются..." />
                           </div>
-                        )}
-                        <span
-                          className={`tarot-flip__orientation ${
-                            openedDailyCard.reversed
-                              ? "tarot-flip__orientation--rev"
-                              : ""
-                          }`}
-                        >
-                          {openedDailyCard.reversed ? "↓ Перевёрнутое" : "↑ Прямое"}
-                        </span>
+                        ) : openedDailyCard ? (
+                          <div className="tarot-flip__img-wrap">
+                            {openedDailyCard.image_url ? (
+                              <img
+                                src={openedDailyCard.image_url}
+                                alt={openedDailyCard.name_ru}
+                                className="tarot-flip__img"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="tarot-flip__img-fallback">
+                                {openedDailyCard.emoji}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="tarot-flip__info">
-                        <div className="tarot-flip__arcana">
-                          {openedDailyCard.arcana === "major"
-                            ? "Старший аркан"
-                            : "Младший аркан"}
-                        </div>
-                        <div className="tarot-flip__name">
-                          {openedDailyCard.name_ru}
-                        </div>
-                        <p className="tarot-flip__keywords">
-                          {openedDailyCard.keywords_ru?.slice(0, 3).join(" · ")}
-                        </p>
-                        <MeaningText text={openedDailyCard.meaning_ru} compact />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="tarot-flip__empty">
-                      <p className="tarot-flip__empty-title">Карта пока не пришла</p>
-                      <button
-                        type="button"
-                        className="tarot-flip__retry"
-                        onClick={() => {
-                          impact("light");
-                          void refetchDailyCard();
-                        }}
-                      >
-                        Открыть снова
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </motion.div>
                 </div>
-              )}
-            </motion.div>
-          </div>
-        </motion.div>
+              </div>
+              <motion.div
+                key={cardRevealed ? "text-front" : "text-back"}
+                className="tarot-day-card__text"
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+              >
+                {!cardRevealed ? (
+                  <>
+                    <div className="tarot-day-card__hint-title">
+                      Ваша карта дня
+                    </div>
+                    <p className="tarot-day-card__hint-desc">
+                      Нажмите на карту слева, чтобы узнать совет на сегодня.
+                    </p>
+                    <span className="tarot-flip__free">Бесплатно</span>
+                  </>
+                ) : cardError ? (
+                  <div className="tarot-flip__empty">
+                    <p className="tarot-flip__empty-title">
+                      Не удалось открыть карту
+                    </p>
+                    <button
+                      type="button"
+                      className="tarot-flip__retry"
+                      onClick={() => {
+                        impact("light");
+                        void refetchDailyCard();
+                      }}
+                    >
+                      Повторить
+                    </button>
+                  </div>
+                ) : openedDailyCard ? (
+                  <div className="tarot-flip__info">
+                    <div className="tarot-flip__meta-row">
+                      <span className="tarot-flip__arcana">
+                        {openedDailyCard.arcana === "major"
+                          ? "Старший аркан"
+                          : "Младший аркан"}
+                      </span>
+                      <span
+                        className={`tarot-flip__orientation ${
+                          openedDailyCard.reversed
+                            ? "tarot-flip__orientation--rev"
+                            : ""
+                        }`}
+                      >
+                        {openedDailyCard.reversed
+                          ? "↓ Перевёрнутое"
+                          : "↑ Прямое"}
+                      </span>
+                    </div>
+                    <div className="tarot-flip__name">
+                      {openedDailyCard.name_ru}
+                    </div>
+                    <p className="tarot-flip__keywords">
+                      {openedDailyCard.keywords_ru?.slice(0, 3).join(" · ")}
+                    </p>
+                    <MeaningText text={openedDailyCard.meaning_ru} compact />
+                  </div>
+                ) : !cardLoading && !cardFetching ? (
+                  <div className="tarot-flip__empty">
+                    <p className="tarot-flip__empty-title">
+                      Карта пока не пришла
+                    </p>
+                    <button
+                      type="button"
+                      className="tarot-flip__retry"
+                      onClick={() => {
+                        impact("light");
+                        void refetchDailyCard();
+                      }}
+                    >
+                      Открыть снова
+                    </button>
+                  </div>
+                ) : null}
+              </motion.div>
+            </div>
+          </motion.div>
         )}
       </div>
     </div>

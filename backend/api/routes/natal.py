@@ -4,6 +4,7 @@ from secrets import token_urlsafe
 from typing import Any
 from urllib.parse import quote
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,19 +14,28 @@ from core.cache import cache_get, cache_set, key_natal, key_natal_pdf_download
 from core.logging import get_logger
 from core.settings import settings
 from db.database import get_db
+from services.astro.dominants import compute_dominants
 from services.astro.interpreter import get_natal_interpretation
+from services.astro.key_aspects import top_n_aspects
 from services.astro.llm_interpreter import generate_natal_reading
 from services.astro.natal_descriptions import generate_natal_descriptions
+from services.astro.natal_hero import (
+    build_aspects_hero,
+    build_elements_hero,
+    build_houses_hero,
+    build_planets_hero,
+)
 from services.users import repository as user_repo
 
 log = get_logger(__name__)
 
 router = APIRouter(prefix="/natal", tags=["natal"])
 _PDF_DOWNLOAD_TTL_SECONDS = 300
+NATAL_DESCRIPTIONS_VERSION = 2
 
 
 def _empty_descriptions() -> dict[str, Any]:
-    return {"planets": {}, "houses": {}, "aspects": []}
+    return {"_version": NATAL_DESCRIPTIONS_VERSION, "planets": {}, "houses": {}, "aspects": []}
 
 
 def _has_any(descriptions: dict[str, Any]) -> bool:
@@ -54,7 +64,11 @@ async def _get_or_generate_descriptions(
     chart = user.natal_chart
     chart_data = chart.chart_data or {}
     stored = chart_data.get("descriptions")
-    if isinstance(stored, dict) and _has_any(stored):
+    if (
+        isinstance(stored, dict)
+        and stored.get("_version") == NATAL_DESCRIPTIONS_VERSION
+        and _has_any(stored)
+    ):
         return stored
 
     if not settings.ANTHROPIC_API_KEY:
@@ -76,6 +90,7 @@ async def _get_or_generate_descriptions(
         return _empty_descriptions()
 
     if _has_any(result):
+        result = {"_version": NATAL_DESCRIPTIONS_VERSION, **result}
         # Reassign the whole dict so SQLAlchemy detects the change (default
         # JSON columns don't track mutations to nested keys).
         chart.chart_data = {**chart_data, "descriptions": result}
@@ -106,6 +121,46 @@ def _natal_pdf_filename(user) -> str:
     return f"natal_{safe_name}.pdf"
 
 
+async def _get_or_generate_pdf_reading(
+    user,
+    chart,
+    planets: dict[str, Any],
+    aspects: list[dict[str, Any]],
+) -> str | None:
+    cache_key = key_natal(user.id)
+    cached = await cache_get(cache_key)
+    if isinstance(cached, dict):
+        reading = cached.get("reading")
+        if isinstance(reading, str) and reading.strip():
+            return reading
+
+    if not settings.ANTHROPIC_API_KEY:
+        return None
+
+    try:
+        reading = await generate_natal_reading(
+            sun_sign=chart.sun_sign,
+            moon_sign=chart.moon_sign,
+            ascendant_sign=chart.ascendant_sign,
+            planets=planets,
+            aspects=aspects,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+    except Exception as e:
+        log.error("natal.pdf_reading_failed", user_id=user.id, error=str(e))
+        return None
+
+    if reading and reading.strip():
+        cached_payload = cached if isinstance(cached, dict) else {}
+        await cache_set(
+            cache_key,
+            {**cached_payload, "reading": reading},
+            settings.CACHE_TTL_NATAL,
+        )
+
+    return reading
+
+
 async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
     from services.natal_pdf import generate_natal_pdf
 
@@ -118,11 +173,8 @@ async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
         for a in aspects_raw
     ]
 
-    cache_key = key_natal(user.id)
-    cached = await cache_get(cache_key)
-    reading = cached.get("reading") if isinstance(cached, dict) else None
-
     descriptions = await _get_or_generate_descriptions(db, user)
+    reading = await _get_or_generate_pdf_reading(user, chart, planets, aspects)
 
     pdf_bytes = generate_natal_pdf(
         user_name=user.tg_first_name or "User",
@@ -155,6 +207,41 @@ async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
             ),
         },
     )
+
+
+async def _send_natal_pdf_to_chat(db: AsyncSession, user) -> int | None:
+    response = await _build_natal_pdf_response(db, user)
+    filename = _natal_pdf_filename(user)
+    url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendDocument"
+    data = {
+        "chat_id": user.id,
+        "caption": "Ваш полный PDF-отчёт по натальной карте",
+    }
+    files = {
+        "document": (filename, response.body, "application/pdf"),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            tg_response = await client.post(url, data=data, files=files)
+        payload = tg_response.json()
+    except Exception as e:
+        log.error("natal.pdf_send_failed", user_id=user.id, error=str(e))
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Не удалось отправить PDF в Telegram",
+        ) from e
+
+    if not payload.get("ok"):
+        description = str(payload.get("description") or "Telegram API error")
+        log.error("natal.pdf_send_rejected", user_id=user.id, error=description)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Не удалось отправить PDF в Telegram",
+        )
+
+    message_id = payload.get("result", {}).get("message_id")
+    return int(message_id) if isinstance(message_id, int) else None
 
 
 @router.get("/summary")
@@ -203,6 +290,34 @@ async def get_natal_summary(
     birth_date_str = user.birth_date.strftime("%Y-%m-%d") if user.birth_date else None
     birth_time_str = user.birth_date.strftime("%H:%M") if (user.birth_date and user.birth_time_known) else "12:00"
 
+    raw_aspects = chart.chart_data.get("aspects", [])
+    try:
+        dominants = compute_dominants(
+            planets=raw_planets,
+            ascendant_sign=chart.ascendant_sign if user.birth_time_known else None,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.warning("natal.dominants_failed", user_id=user.id, error=str(e))
+        dominants = None
+
+    try:
+        key_aspects = top_n_aspects(raw_aspects, n=5)
+    except Exception as e:  # noqa: BLE001
+        log.warning("natal.key_aspects_failed", user_id=user.id, error=str(e))
+        key_aspects = []
+
+    hero_info: dict[str, Any] | None = None
+    if dominants:
+        try:
+            hero_info = {
+                "elements": build_elements_hero(dominants),
+                "planets":  build_planets_hero(raw_planets, dominants),
+                "houses":   build_houses_hero(raw_planets),
+                "aspects":  build_aspects_hero(raw_aspects, key_aspects),
+            }
+        except Exception as e:  # noqa: BLE001
+            log.warning("natal.hero_failed", user_id=user.id, error=str(e))
+
     return {
         "has_chart":        True,
         "sun_sign":         chart.sun_sign,
@@ -218,7 +333,10 @@ async def get_natal_summary(
         "birth_time":       birth_time_str,
         "planets":          planets_for_wheel,
         "houses":           houses_for_wheel,
-        "aspects":          chart.chart_data.get("aspects", []),
+        "aspects":          raw_aspects,
+        "dominants":        dominants,
+        "key_aspects":      key_aspects,
+        "hero_info":        hero_info,
     }
 
 
@@ -357,6 +475,17 @@ async def create_natal_pdf_link(
         "filename": _natal_pdf_filename(user),
         "expires_in": _PDF_DOWNLOAD_TTL_SECONDS,
     }
+
+
+@router.post("/pdf-send")
+async def send_natal_pdf_to_chat(
+    tg_user: dict = Depends(get_tg_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate natal PDF and send it to the user's Telegram chat as a document."""
+    user = await _get_pdf_user_or_error(db, tg_user["id"])
+    message_id = await _send_natal_pdf_to_chat(db, user)
+    return {"sent": True, "message_id": message_id}
 
 
 @router.get("/pdf-download/{token}")

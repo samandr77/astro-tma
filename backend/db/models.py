@@ -106,6 +106,16 @@ class User(TimestampMixin, Base):
     sun_sign: Mapped[ZodiacSign | None] = mapped_column(Enum(ZodiacSign, values_callable=lambda e: [x.value for x in e]))
     push_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Launch monetization v1.1 — referral programme (Model B)
+    referral_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
+    referred_by: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    referred_by_processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    referred_purchase_processed: Mapped[bool] = mapped_column(Boolean, default=False)
+
     natal_chart: Mapped["NatalChart | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan")
     subscriptions: Mapped[list["Subscription"]] = relationship(
@@ -216,6 +226,9 @@ class Subscription(TimestampMixin, Base):
     tg_payment_charge_id: Mapped[str] = mapped_column(String(256), unique=True)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Launch monetization v1.1: distinguish a granted trial from a paid sub
+    is_trial: Mapped[bool] = mapped_column(Boolean, default=False)
+    trial_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     user: Mapped["User"] = relationship(back_populates="subscriptions")
 
 
@@ -373,3 +386,31 @@ class MacPick(Base):
     created_at: Mapped["datetime"] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+# ── Referrals ────────────────────────────────────────────────────────────────
+class ReferralReward(TimestampMixin, Base):
+    """Audit log of every Premium-day grant from the referral programme.
+
+    Event types:
+    - "signup_referee_bonus" — referee got an extended welcome trial when
+      they applied a code on signup
+    - "first_purchase_referrer_bonus" — referrer got their +N days when
+      the referee made their first real (paid) purchase
+    """
+    __tablename__ = "referral_rewards"
+    __table_args__ = (
+        UniqueConstraint(
+            "referrer_id", "referee_id", "event_type",
+            name="uq_referral_event",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    referrer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True,
+    )
+    referee_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(32))
+    days_granted: Mapped[int] = mapped_column(Integer)

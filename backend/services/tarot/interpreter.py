@@ -114,7 +114,7 @@ def _build_prompt(spread_type: str, cards: list[dict[str, Any]]) -> str:
     )
 
     json_positions = ",\n    ".join(
-        f'{{"n": {i}, "narrative": "<2–4 предложения>"}}'
+        f'{{"n": {i}, "narrative": "<2–3 предложения>"}}'
         for i in range(1, expected_n + 1)
     )
 
@@ -133,7 +133,7 @@ def _build_prompt(spread_type: str, cards: list[dict[str, Any]]) -> str:
   "positions": [
     {json_positions}
   ],
-  "summary": "<120–180 слов: общий вывод и 1-2 конкретных совета на основе всего расклада>"
+  "summary": "<80–120 слов: общий вывод и один конкретный совет на основе всего расклада>"
 }}
 
 КАК ПИСАТЬ:
@@ -196,10 +196,15 @@ async def generate_spread_interpretation(
 
     prompt = _build_prompt(spread_type, cards)
 
+    # max_tokens scaled to spread size: ~70 tokens per position (3 sentences)
+    # + 200 tokens summary + a safety margin. Caps growth on big spreads
+    # (celtic 10 cards) without truncating the smaller ones.
+    cap = 600 + expected_n * 180
+
     client = anthropic.AsyncAnthropic(api_key=api_key)
     message = await client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=2400,
+        max_tokens=cap,
         messages=[{"role": "user", "content": prompt}],
     )
 

@@ -2,13 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { EnergyBars } from "@/components/ui/EnergyBars";
-import { PremiumGate } from "@/components/ui/PremiumGate";
 import { HoroscopeSkeleton } from "@/components/ui/Skeleton";
 import { HeaderAvatarButton } from "@/components/ui/HeaderAvatarButton";
 import { horoscopeApi } from "@/services/api";
 import { useAppStore } from "@/stores/app";
 import { useHaptic } from "@/hooks/useTelegram";
 import { ZODIAC_SIGNS, type ZodiacSign } from "@/types";
+import { ZodiacIcon } from "@/components/ui/ZodiacIcon";
 
 type Period = "today" | "tomorrow" | "week" | "month";
 
@@ -17,14 +17,6 @@ const PERIOD_LABELS: Record<Period, string> = {
   tomorrow: "Завтра",
   week: "Неделя",
   month: "Месяц",
-};
-const PERIOD_PRODUCTS: Record<
-  Exclude<Period, "today">,
-  { id: string; stars: number }
-> = {
-  tomorrow: { id: "horoscope_tomorrow", stars: 25 },
-  week: { id: "horoscope_week", stars: 50 },
-  month: { id: "horoscope_month", stars: 75 },
 };
 
 /**
@@ -76,7 +68,9 @@ export function Horoscopes() {
                 }}
                 aria-pressed={active}
               >
-                <span className="zodiac-grid__emoji">{s.emoji}</span>
+                <span className="zodiac-grid__emoji">
+                  <ZodiacIcon sign={s.value} size={28} />
+                </span>
                 <span className="zodiac-grid__label">{s.label}</span>
               </button>
             );
@@ -95,22 +89,6 @@ export function Horoscopes() {
               }}
             >
               {PERIOD_LABELS[p]}
-              {p !== "today" && !user?.is_premium && (
-                <svg
-                  className="period-tab__lock"
-                  width="10"
-                  height="10"
-                  viewBox="0 0 10 10"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="1.5" y="4.5" width="7" height="5" rx="1" />
-                  <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" />
-                </svg>
-              )}
             </button>
           ))}
         </div>
@@ -118,7 +96,7 @@ export function Horoscopes() {
         {/* Horoscope card */}
         {isLoading ? (
           <HoroscopeSkeleton />
-        ) : period === "today" ? (
+        ) : (
           <motion.div
             key={`horo-${period}-${selectedSign}`}
             className="horoscope-card glass-gold"
@@ -127,7 +105,9 @@ export function Horoscopes() {
           >
             <div className="card-tag">✦ {PERIOD_LABELS[period]}</div>
             <div className="card-sign-row">
-              <div className="sign-badge">{signInfo?.emoji ?? "✦"}</div>
+              <div className="sign-badge">
+                {signInfo ? <ZodiacIcon sign={signInfo.value} size={32} /> : "✦"}
+              </div>
               <div>
                 <div className="sign-name">{signInfo?.label}</div>
                 <div className="sign-dates">{signInfo?.dates}</div>
@@ -136,31 +116,6 @@ export function Horoscopes() {
             <p className="horoscope-text">{horoscope?.text_ru}</p>
             {horoscope?.energy && <EnergyBars scores={horoscope.energy} />}
           </motion.div>
-        ) : (
-          <PremiumGate
-            locked={!user?.is_premium}
-            productId={PERIOD_PRODUCTS[period as Exclude<Period, "today">].id}
-            productName={`Гороскоп — ${PERIOD_LABELS[period]}`}
-            stars={PERIOD_PRODUCTS[period as Exclude<Period, "today">].stars}
-          >
-            <motion.div
-              key={`horo-${period}-${selectedSign}`}
-              className="horoscope-card glass-gold"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="card-tag">✦ {PERIOD_LABELS[period]}</div>
-              <div className="card-sign-row">
-                <div className="sign-badge">{signInfo?.emoji ?? "✦"}</div>
-                <div>
-                  <div className="sign-name">{signInfo?.label}</div>
-                  <div className="sign-dates">{signInfo?.dates}</div>
-                </div>
-              </div>
-              <p className="horoscope-text">{horoscope?.text_ru}</p>
-              {horoscope?.energy && <EnergyBars scores={horoscope.energy} />}
-            </motion.div>
-          </PremiumGate>
         )}
       </div>
     </div>

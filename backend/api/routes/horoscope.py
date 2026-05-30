@@ -123,22 +123,13 @@ async def get_period_horoscope(
     tg_user: dict = Depends(get_tg_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Premium endpoint — requires active subscription or period purchase.
+    """Free endpoint. Returns the short tone-of-the-period text for all
+    users. Premium subscribers may additionally see a detailed breakdown
+    on the frontend; that detail call is gated separately when implemented.
     Accepts optional `sign` to view a generic horoscope for any sign."""
     user = await user_repo.get_by_id(db, tg_user["id"])
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-
-    product_map = {
-        "tomorrow": "horoscope_tomorrow",
-        "week": "horoscope_week",
-        "month": "horoscope_month",
-    }
-    is_prem = await user_repo.is_premium(db, user.id)
-    has_purchase = await user_repo.has_purchased(db, user.id, product_map[period])
-
-    if not (is_prem or has_purchase):
-        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "Premium required")
 
     requested = (sign or "").lower().strip()
     if requested and requested in _VALID_SIGNS:

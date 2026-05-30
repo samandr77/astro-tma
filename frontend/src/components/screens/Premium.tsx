@@ -22,10 +22,16 @@ export function Premium() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const subscription = products.find(
-    (p) => p.type === "subscription" || p.id.includes("subscription"),
+  const monthly = products.find((p) => p.id === "subscription_month");
+  const yearly = products.find((p) => p.id === "subscription_year");
+  const subscriptionIds = new Set(
+    [monthly?.id, yearly?.id].filter(Boolean) as string[],
   );
-  const oneOffs = products.filter((p) => p !== subscription);
+  const oneOffs = products.filter((p) => !subscriptionIds.has(p.id));
+  const yearlySavingsPct =
+    monthly && yearly
+      ? Math.max(0, Math.round((1 - yearly.stars / (monthly.stars * 12)) * 100))
+      : 0;
 
   const handleBuy = async (productId: string) => {
     impact("medium");
@@ -60,14 +66,40 @@ export function Premium() {
               ? "Все разделы и подробные прогнозы открыты для вас."
               : "Доступ ко всем гороскопам, полной натальной карте, раскладам Таро и синастрии."}
           </p>
-          {!user?.is_premium && subscription && (
-            <button
-              className="btn-stars premium-hero__cta"
-              onClick={() => handleBuy(subscription.id)}
-              disabled={loading}
-            >
-              {loading ? "⏳ Открываем…" : `⭐ ${subscription.stars} / мес`}
-            </button>
+
+          {!user?.is_premium && (monthly || yearly) && (
+            <div className="premium-plans">
+              {monthly && (
+                <button
+                  className="premium-plan"
+                  onClick={() => handleBuy(monthly.id)}
+                  disabled={loading}
+                >
+                  <span className="premium-plan__label">Месяц</span>
+                  <span className="premium-plan__price">⭐ {monthly.stars}</span>
+                  <span className="premium-plan__period">30 дней</span>
+                </button>
+              )}
+              {yearly && (
+                <button
+                  className="premium-plan premium-plan--best"
+                  onClick={() => handleBuy(yearly.id)}
+                  disabled={loading}
+                >
+                  {yearlySavingsPct > 0 && (
+                    <span className="premium-plan__badge">
+                      −{yearlySavingsPct}%
+                    </span>
+                  )}
+                  <span className="premium-plan__label">Год</span>
+                  <span className="premium-plan__price">⭐ {yearly.stars}</span>
+                  <span className="premium-plan__period">365 дней</span>
+                </button>
+              )}
+            </div>
+          )}
+          {!user?.is_premium && loading && (
+            <p className="premium-hero__hint">⏳ Открываем оплату…</p>
           )}
         </motion.div>
 

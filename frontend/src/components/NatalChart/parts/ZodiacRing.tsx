@@ -1,5 +1,6 @@
 import type { ChartVariant } from '../types';
-import { ZODIAC_EN_LABEL, ZODIAC_GLYPH, ZODIAC_ORDER, WHEEL } from '../constants';
+import { ZODIAC_EN_LABEL, ZODIAC_ORDER, WHEEL } from '../constants';
+import { zodiacIconUrl } from '@/components/ui/ZodiacIcon';
 import { polar, sectorPath, zodiacToSvgAngle } from '../utils/geometry';
 import styles from '../NatalChart.module.css';
 
@@ -69,19 +70,19 @@ export function ZodiacRing({ ascendantDegree, variant = 'editorial' }: Props) {
         );
       })}
 
-      {/* glyphs — upright, centered in each sector */}
+      {/* glyphs — full SVG icon referenced via <image>, centered in each sector */}
       {ZODIAC_ORDER.map((sign, i) => {
         const midSvgAng = zodiacToSvgAngle(i * 30 + 15, ascendantDegree);
         const pos = polar(0, 0, glyphR, midSvgAng);
+        const visualSize = isReferenceWheel ? 44 : isPoster ? 58 : GLYPH_FONT_SIZE;
         return (
-          <text
+          <image
             key={`glyph-${sign}`}
-            x={pos.x}
-            y={pos.y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={isReferenceWheel ? 44 : isPoster ? 58 : GLYPH_FONT_SIZE}
-            fill={isSquareWheel ? 'var(--natal-accent)' : 'var(--natal-primary)'}
+            href={zodiacIconUrl(sign)}
+            x={pos.x - visualSize / 2}
+            y={pos.y - visualSize / 2}
+            width={visualSize}
+            height={visualSize}
             className={
               isReferenceWheel
                 ? styles.referenceGlyphText
@@ -89,9 +90,7 @@ export function ZodiacRing({ ascendantDegree, variant = 'editorial' }: Props) {
                   ? styles.posterGlyphText
                   : styles.glyphText
             }
-          >
-            {ZODIAC_GLYPH[sign]}
-          </text>
+          />
         );
       })}
 

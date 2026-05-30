@@ -35,21 +35,34 @@ _SIGN_ELEMENTS: dict[str, str] = {
 }
 
 
+_WEEKDAY_RU = [
+    "понедельник", "вторник", "среда", "четверг",
+    "пятница", "суббота", "воскресенье",
+]
+
+
+def _ru_weekday(d: date) -> str:
+    """Russian weekday name only — no date or year. We pass weekday
+    explicitly because Haiku is unreliable at computing it from a date."""
+    return _WEEKDAY_RU[d.weekday()]
+
+
 def _build_horoscope_prompt(sign: str, target_date: date, period: str = "today") -> str:
     sign_ru = _SIGN_RU.get(sign, sign)
     ruler = _SIGN_RULERS.get(sign, "")
     element = _SIGN_ELEMENTS.get(sign, "")
 
+    weekday = _ru_weekday(target_date)
     period_desc = {
-        "today": f"на сегодня ({target_date.strftime('%d.%m.%Y')})",
-        "tomorrow": f"на завтра ({target_date.strftime('%d.%m.%Y')})",
+        "today": f"на сегодня ({weekday})",
+        "tomorrow": f"на завтра ({weekday})",
         "week": "на эту неделю",
         "month": "на этот месяц",
     }.get(period, "на сегодня")
 
     return f"""Ты пишешь короткие гороскопы для популярного приложения. Читатели — обычные люди, не астрологи.
 
-Гороскоп {period_desc} для знака {sign_ru} (стихия — {element}, управитель — {ruler}, дата — {target_date.strftime('%d %B %Y')}).
+Гороскоп {period_desc} для знака {sign_ru} (стихия — {element}, управитель — {ruler}). Если упоминаешь день недели, используй именно: {weekday}.
 
 ЧТО НУЖНО НАПИСАТЬ (4-6 предложений):
 - Главный тон периода — что приходит, на что обратить внимание.

@@ -3,15 +3,19 @@ User repository — all DB queries for the User domain.
 Services call this; routes call services. Routes never touch DB directly.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.logging import get_logger
 from db.models import (
     NatalChart,
+    Purchase,
+    PurchaseStatus,
+    Subscription,
+    SubscriptionStatus,
     User,
     ZodiacSign,
 )
@@ -60,6 +64,23 @@ async def get_or_create(
     )
     db.add(user)
     await db.flush()
+
+    # Welcome trial — every brand-new user gets N days of Premium so they
+    # can taste the product before the first paywall. Failure here must
+    # not prevent the user from being created.
+    from core.settings import settings
+    if settings.FEATURE_WELCOME_TRIAL:
+        try:
+            from services.payments.trial import grant_trial_days
+            await grant_trial_days(
+                db,
+                user_id=user.id,
+                days=settings.WELCOME_TRIAL_DAYS,
+                reason="welcome",
+            )
+        except Exception as e:  # noqa: BLE001
+            log.error("welcome_trial.failed", user_id=user.id, error=str(e))
+
     log.info("user.created", user_id=tg_user_id, name=first_name)
     return user, True
 
@@ -120,15 +141,29 @@ async def save_natal_chart(
 
 
 async def is_premium(db: AsyncSession, user_id: int) -> bool:
-    """
-    Check if user has active premium subscription.
-    # TEST MODE: always returns True — revert before production
-    """
-    return True  # TEST MODE
+    """True if the user has at least one ACTIVE subscription that hasn't expired."""
+    now = datetime.now(UTC)
+    result = await db.execute(
+        select(Subscription.id).where(
+            and_(
+                Subscription.user_id == user_id,
+                Subscription.status == SubscriptionStatus.ACTIVE,
+                Subscription.expires_at > now,
+            )
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def has_purchased(db: AsyncSession, user_id: int, product_id: str) -> bool:
-    """Check one-time purchase (e.g. natal_full, synastry).
-    # TEST MODE: always returns True — revert before production
-    """
-    return True  # TEST MODE
+    """True if the user has at least one COMPLETED purchase for `product_id`."""
+    result = await db.execute(
+        select(Purchase.id).where(
+            and_(
+                Purchase.user_id == user_id,
+                Purchase.product_id == product_id,
+                Purchase.status == PurchaseStatus.COMPLETED,
+            )
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None

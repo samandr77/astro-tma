@@ -3,15 +3,19 @@
   flex-direction: column;
   gap: 14px;
   padding-bottom: 32px;
+  max-width: 100%;
+  min-width: 0;
+  font-family: var(--tarot-font-body);
 }
 
 .empty {
   text-align: center;
   padding: 60px 24px;
   color: rgba(232, 224, 208, 0.6);
-  font-family: "Cormorant Garamond", serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-family: var(--tarot-font-body);
+  font-size: var(--tarot-body-size);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .loading {
@@ -19,7 +23,10 @@
   justify-content: center;
   padding: 40px;
   color: rgba(212, 178, 84, 0.7);
-  font-family: "Cormorant Garamond", serif;
+  font-family: var(--tarot-font-body);
+  font-size: var(--tarot-small-size);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .item {
@@ -31,6 +38,8 @@
   border-radius: 12px;
   background: rgba(14, 11, 32, 0.5);
   cursor: pointer;
+  max-width: 100%;
+  min-width: 0;
   transition: border-color 0.2s ease, transform 0.15s ease;
 }
 .item:active {
@@ -43,30 +52,39 @@
   justify-content: space-between;
   align-items: baseline;
   gap: 12px;
+  min-width: 0;
 }
 .itemName {
-  font-family: "Playfair Display", serif;
-  font-size: 16px;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-body-size);
   color: rgba(212, 178, 84, 0.95);
+  line-height: 1.3;
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .itemDate {
-  font-family: "Cinzel", "Playfair Display", serif;
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(201, 168, 76, 0.65);
   white-space: nowrap;
+  line-height: 1.35;
 }
 .itemPreview {
-  font-family: "Cormorant Garamond", serif;
-  font-size: 14px;
+  font-family: var(--tarot-font-body);
+  font-size: var(--tarot-small-size);
   color: rgba(230, 220, 200, 0.75);
-  line-height: 1.4;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 .itemMeta {
-  font-size: 12px;
+  font-size: var(--tarot-label-size);
+  line-height: 1.35;
   color: rgba(201, 168, 76, 0.55);
+  overflow-wrap: anywhere;
 }
 
 /* ── Detail view ── */
@@ -77,19 +95,24 @@
   margin-bottom: 8px;
 }
 .detailTitle {
-  font-family: "Playfair Display", serif;
-  font-size: 20px;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-title-size);
   color: rgba(212, 178, 84, 0.95);
+  line-height: 1.25;
   margin: 0;
   text-align: center;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .detailDate {
   text-align: center;
-  font-family: "Cinzel", "Playfair Display", serif;
-  font-size: 11px;
-  letter-spacing: 0.18em;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(201, 168, 76, 0.65);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .backLink {
   background: transparent;
@@ -97,8 +120,13 @@
   color: rgba(212, 178, 84, 0.9);
   padding: 8px 16px;
   border-radius: 999px;
-  font-size: 13px;
+  font-family: var(--tarot-font-display);
+  font-size: var(--tarot-label-size);
+  line-height: 1.35;
   cursor: pointer;
   align-self: center;
   margin-bottom: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }

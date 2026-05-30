@@ -254,7 +254,7 @@ export function Discover() {
                       : handleLockedTap(card.label)
                   }
                   whileTap={!card.locked ? { scale: 0.95 } : undefined}
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={false}
                   animate={
                     shaking === card.label
                       ? { x: [0, -6, 6, -5, 5, -3, 3, 0], opacity: 1, y: 0 }

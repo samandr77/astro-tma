@@ -29,60 +29,46 @@ from db.models import (
 log = get_logger(__name__)
 
 # ── Product catalogue ─────────────────────────────────────────────────────────
+# Launch monetization v1.1: horoscope_*, tarot_week, transits_*_preview were
+# retired (gateways moved to the subscription). Existing rows in `purchases`
+# for those product_ids stay in the DB for historical accuracy.
+# Russian display names for retired SKUs — purchase rows for these still
+# live in the DB and need a humane title on the "Мои покупки" screen.
+LEGACY_PRODUCT_NAMES_RU: dict[str, str] = {
+    "horoscope_tomorrow":       "Гороскоп на завтра",
+    "horoscope_week":           "Гороскоп на неделю",
+    "horoscope_month":          "Гороскоп на месяц",
+    "tarot_celtic":             "Расклад Кельтский Крест",
+    "tarot_week":               "Карты на неделю",
+    "transits_week_preview":    "Транзиты на неделю",
+    "transits_month_preview":   "Транзиты на месяц",
+}
+
+
 PRODUCTS: dict[str, dict] = {
-    "horoscope_tomorrow": {
-        "name": "Гороскоп на завтра",
-        "description": "Персональный гороскоп на завтра с анализом транзитов",
-        "stars": settings.PRICE_HOROSCOPE_TOMORROW,
-        "type": "one_time",
-    },
-    "horoscope_week": {
-        "name": "Гороскоп на неделю",
-        "description": "Прогноз на 7 дней с анализом планетарных влияний",
-        "stars": settings.PRICE_HOROSCOPE_WEEK,
-        "type": "one_time",
-    },
-    "horoscope_month": {
-        "name": "Гороскоп на месяц",
-        "description": "Детальный прогноз на весь месяц",
-        "stars": settings.PRICE_HOROSCOPE_MONTH,
-        "type": "one_time",
-    },
-    "tarot_celtic": {
-        "name": "Расклад Кельтский Крест",
-        "description": "Глубокий 10-карточный расклад для детального анализа ситуации",
-        "stars": settings.PRICE_TAROT_CELTIC,
-        "type": "one_time",
-    },
-    "tarot_week": {
-        "name": "Таро на неделю",
-        "description": "Одна карта на каждый день недели",
-        "stars": settings.PRICE_TAROT_WEEK,
-        "type": "one_time",
-    },
     "natal_full": {
         "name": "Полная натальная карта",
-        "description": "Детальный анализ всех планет, домов и аспектов + SVG-диаграмма",
+        "description": "Длинные интерпретации планет/домов/аспектов + персональный портрет + PDF",
         "stars": settings.PRICE_NATAL_FULL,
         "type": "one_time",
     },
     "synastry": {
-        "name": "Синастрия — совместимость",
+        "name": "Синастрия — детальный анализ",
         "description": "Глубокий анализ совместимости двух натальных карт",
         "stars": settings.PRICE_SYNASTRY,
         "type": "one_time",
     },
     "subscription_month": {
-        "name": "Premium подписка — 30 дней",
-        "description": "Полный доступ ко всем функциям на 30 дней",
+        "name": "Premium — 30 дней",
+        "description": "Все интерпретации, прогнозы на неделю и месяц, Таро на неделю, push о значимых транзитах",
         "stars": settings.PRICE_SUBSCRIPTION_MONTH,
         "type": "subscription",
         "duration_days": 30,
         "plan": SubscriptionPlan.PREMIUM_MONTH,
     },
     "subscription_year": {
-        "name": "Premium подписка — 365 дней",
-        "description": "Полный доступ ко всем функциям на год. Выгода 40%!",
+        "name": "Premium — 365 дней",
+        "description": "Всё то же, что в месячной, но на год. Выгода 38%.",
         "stars": settings.PRICE_SUBSCRIPTION_YEAR,
         "type": "subscription",
         "duration_days": 365,
@@ -99,7 +85,12 @@ async def create_invoice_link(user_id: int, product_id: str) -> str:
     if product_id not in PRODUCTS:
         raise ValueError(f"Unknown product: {product_id!r}")
 
+    # Lazy import to avoid circular dependency between pricing and stars.
+    from services.payments.pricing import get_product_price
+
     product = PRODUCTS[product_id]
+    stars_amount = await get_product_price(product_id, default=product["stars"])
+
     # Payload encodes user + product + timestamp for webhook verification
     payload = f"{user_id}:{product_id}:{int(time.time())}"
 
@@ -110,9 +101,9 @@ async def create_invoice_link(user_id: int, product_id: str) -> str:
                 "title": product["name"],
                 "description": product["description"],
                 "payload": payload,
-                "provider_token": "",   # MUST be empty for Stars
-                "currency": "XTR",      # Telegram Stars
-                "prices": [{"label": product["name"], "amount": product["stars"]}],
+                "provider_token": "",  # MUST be empty for Stars
+                "currency": "XTR",  # Telegram Stars
+                "prices": [{"label": product["name"], "amount": stars_amount}],
             },
         )
 
@@ -122,7 +113,12 @@ async def create_invoice_link(user_id: int, product_id: str) -> str:
         raise RuntimeError(f"Telegram API error: {data.get('description')}")
 
     invoice_url: str = data["result"]
-    log.info("stars.invoice_created", user_id=user_id, product=product_id, stars=product["stars"])
+    log.info(
+        "stars.invoice_created",
+        user_id=user_id,
+        product=product_id,
+        stars=stars_amount,
+    )
     return invoice_url
 
 
@@ -191,3 +187,23 @@ async def grant_product_access(
         product=product_id,
         charge_id=tg_payment_charge_id,
     )
+
+    # Referral programme — Model B: pay the referrer when their friend
+    # converts. Lazy import to avoid a circular dep between payments and
+    # referrals routes.
+    try:
+        from sqlalchemy import select as _select
+
+        from api.routes.referrals import maybe_award_first_purchase
+        from db.models import User as _UserModel
+
+        result = await db.execute(_select(_UserModel).where(_UserModel.id == user_id))
+        u = result.scalar_one_or_none()
+        await maybe_award_first_purchase(
+            db,
+            referee_user_id=user_id,
+            referee_first_name=u.tg_first_name if u else None,
+            product_id=product_id,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.warning("referral.hook_failed", user_id=user_id, error=str(e))

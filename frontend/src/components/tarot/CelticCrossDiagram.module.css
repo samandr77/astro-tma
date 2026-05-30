@@ -2,6 +2,8 @@
   display: flex;
   justify-content: center;
   margin: 4px 0;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .diagram {
@@ -18,9 +20,11 @@
   align-items: center;
   justify-content: center;
   color: rgba(212, 178, 84, 0.95);
-  font-family: "Cinzel", "Playfair Display", serif;
+  font-family: var(--tarot-font-display);
   font-size: 48px;
   font-weight: 600;
+  line-height: 1;
+  overflow-wrap: anywhere;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 

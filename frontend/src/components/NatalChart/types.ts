@@ -34,6 +34,7 @@ export interface PlanetPosition {
   minute: number;   // 0–59
   house: number;    // 1–12
   retrograde?: boolean;
+  hidden?: boolean;
 }
 
 export interface HousePosition {

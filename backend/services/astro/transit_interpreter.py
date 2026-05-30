@@ -7,7 +7,8 @@ Cache lives in transit_interpretations (planet order matters here).
 
 import asyncio
 import json
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from sqlalchemy import select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,5 +1,6 @@
 import type { ZodiacSign } from '../types';
-import { ZODIAC_GLYPH, ZODIAC_LABEL } from '../constants';
+import { ZODIAC_LABEL } from '../constants';
+import { zodiacIconUrl } from '@/components/ui/ZodiacIcon';
 import styles from '../NatalChart.module.css';
 
 interface Props {
@@ -49,19 +50,16 @@ export function SideFigure({ sign, side }: Props) {
       />
       <AccentStar cx={x} cy={y - 115} size={5} />
 
-      {/* Large glyph */}
-      <text
-        x={x}
-        y={y}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={96}
-        fill="var(--natal-primary)"
+      {/* Large glyph — full SVG icon */}
+      <image
+        href={zodiacIconUrl(sign)}
+        x={x - 48}
+        y={y - 48}
+        width={96}
+        height={96}
         className={styles.glyphText}
         opacity={0.9}
-      >
-        {ZODIAC_GLYPH[sign]}
-      </text>
+      />
 
       {/* Small dot flourishes beside the glyph */}
       {[-58, -44, 44, 58].map((dx) => (

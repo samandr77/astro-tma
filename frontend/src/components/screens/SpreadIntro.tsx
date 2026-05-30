@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { motion } from "framer-motion";
 import {
   SPREAD_CONFIG,
@@ -12,163 +12,189 @@ interface Props {
   onStart: () => void;
 }
 
-const SCALE_BY_KEY: Record<SpreadKey, number> = {
-  three_card: 0.9,
-  celtic_cross: 0.7,
-  week: 0.94,
-  relationship: 0.55,
-};
-
-export function SpreadIntro({ spreadKey, onStart }: Props) {
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
-  const config = SPREAD_CONFIG[spreadKey];
-  const { layout, backVariant, previewSymbols, title } = config;
-  const scale = SCALE_BY_KEY[spreadKey] ?? 0.55;
-
-  const previewW = layout.w * scale;
-  const previewH = layout.h * scale;
-  const cardW = CARD_W * scale;
-  const cardH = CARD_H * scale;
-  const symbolFontSize = Math.round(cardH * 0.32);
-  const firstPosition = config.sections[0]?.positions[0];
+function ThreeCardIntro({ onStart }: { onStart: () => void }) {
+  const config = SPREAD_CONFIG.three_card;
+  const positions = config.sections[0]?.positions ?? [];
 
   return (
     <motion.div
-      className={`spread-intro-v2 spread-intro-v2--showcase spread-intro-v2--${spreadKey}${
-        spreadKey === "week" ? " spread-intro-v2--week-ritual" : ""
-      }`}
+      className="spread-intro-v2 spread-intro-v2--showcase spread-intro-v2--three_card spread-intro-v2--three-ref"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <h1 className="spread-intro-v2__title">{title}</h1>
+      <h1 className="spread-intro-v2__title spread-intro-v2__title--three">
+        {config.title}
+      </h1>
 
-      <div className="spread-intro-v2__preview">
-        <div
-          className="spread-intro-v2__preview-stage"
-          style={{ width: previewW, height: previewH }}
-        >
-          {layout.slots.map((slot, idx) => {
-            const symbol = previewSymbols?.[idx];
-            const label = symbol ?? String(idx + 1);
-            return (
-              <div
-                key={idx}
-                className={`spread-intro-v2__mini-card card-back-pattern--${backVariant} spread-intro-v2__mini-card--symbolic${
-                  slot.rotate ? " spread-intro-v2__mini-card--cross" : ""
-                }`}
-                style={{
-                  left: slot.x * scale,
-                  top: slot.y * scale,
-                  width: cardW,
-                  height: cardH,
-                  ...(slot.rotate
-                    ? { transform: `rotate(${slot.rotate}deg)` }
-                    : {}),
-                }}
-              >
-                <span
-                  className="spread-intro-v2__mini-symbol"
-                  style={{ fontSize: symbolFontSize }}
-                >
-                  {label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+      <div className="spread-intro-v2__three-preview">
+        {positions.map((pos) => (
+          <div key={pos.num} className="spread-intro-v2__back-card">
+            <div className="spread-intro-v2__back-badge">{pos.num}</div>
+          </div>
+        ))}
       </div>
 
-      {spreadKey === "week" ? (
-        <div className="spread-intro-v2__frame spread-intro-v2__frame--week">
-          <p
-            className="spread-intro-v2__intro-text spread-intro-v2__intro-text--week"
-            dangerouslySetInnerHTML={{ __html: config.intro }}
-          />
-          <div className="spread-intro-v2__divider" aria-hidden="true">
-            <span />
-          </div>
-          {!detailsExpanded && firstPosition && (
-              <div className="spread-intro-v2__week-focus">
-                <span className="spread-intro-v2__week-icon">
-                  {previewSymbols?.[0] ?? "☽"}
-                </span>
-                <div>
-                  <strong>{firstPosition.label}</strong>
-                  <p>{firstPosition.description}</p>
-                </div>
-              </div>
-          )}
-          {detailsExpanded && (
-            <div className="spread-intro-v2__week-details">
-              {config.sections.map((section, si) => (
-                <div key={si} className="spread-intro-v2__section">
-                  {section.title && (
-                    <h4 className="spread-intro-v2__section-title">
-                      {section.title}
-                    </h4>
-                  )}
-                  <div className="spread-intro-v2__positions spread-intro-v2__positions--week-details">
-                    {section.positions.map((pos) => (
-                      <div key={pos.num} className="spread-intro-v2__pos">
-                        <span className="spread-intro-v2__num">
-                          {previewSymbols?.[pos.num - 1] ?? pos.num}
-                        </span>
-                        <div className="spread-intro-v2__pos-body">
-                          <strong>{pos.label}</strong>
-                          <p>{pos.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn-ghost spread-intro-v2__details-btn"
-            onClick={() => setDetailsExpanded((value) => !value)}
-          >
-            {detailsExpanded ? "Скрыть подробности ↑" : "Подробнее ↓"}
-          </button>
-        </div>
-      ) : (
-        <div className="spread-intro-v2__frame">
-          <p
-            className="spread-intro-v2__intro-text"
-            dangerouslySetInnerHTML={{ __html: config.intro }}
-          />
-
-          {config.sections.map((section, si) => (
-            <div key={si} className="spread-intro-v2__section">
-              {section.title && (
-                <h4 className="spread-intro-v2__section-title">
-                  {section.title}
-                </h4>
-              )}
-              <div className="spread-intro-v2__positions">
-                {section.positions.map((pos) => (
-                  <div key={pos.num} className="spread-intro-v2__pos">
-                    <span className="spread-intro-v2__num">{pos.num}</span>
-                    <div className="spread-intro-v2__pos-body">
-                      <strong>{pos.label}</strong>
-                      <p>{pos.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="spread-intro-v2__frame spread-intro-v2__frame--three">
+        <p
+          className="spread-intro-v2__story"
+          dangerouslySetInnerHTML={{ __html: config.intro }}
+        />
+      </div>
 
       <motion.button
         className="btn-primary spread-intro-v2__start-btn"
         onClick={onStart}
         whileTap={{ scale: 0.96 }}
       >
-        {spreadKey === "week" ? "ОТКРЫТЬ КАРТЫ ✦" : "Перейти к раскладу"}
+        Перейти к раскладу
+      </motion.button>
+    </motion.div>
+  );
+}
+
+export function SpreadIntro({ spreadKey, onStart }: Props) {
+  const [titleScale, setTitleScale] = useState(1);
+  const titleWrapRef = useRef<HTMLHeadingElement>(null);
+  const titleMeasureRef = useRef<HTMLSpanElement>(null);
+
+  const config = SPREAD_CONFIG[spreadKey];
+  const { layout, title } = config;
+  const previewCardW = CARD_H * (794 / 1551);
+  const titleStyle = {
+    "--spread-title-scale": titleScale,
+  } as CSSProperties;
+
+  useLayoutEffect(() => {
+    const titleWrap = titleWrapRef.current;
+    const titleMeasure = titleMeasureRef.current;
+    if (!titleWrap || !titleMeasure) return;
+
+    let frame = 0;
+    const updateScale = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const availableWidth = titleWrap.clientWidth;
+        const naturalWidth = titleMeasure.scrollWidth;
+        const nextScale =
+          availableWidth > 0 && naturalWidth > 0
+            ? Math.min(1, availableWidth / naturalWidth)
+            : 1;
+
+        setTitleScale((current) =>
+          Math.abs(current - nextScale) > 0.005 ? nextScale : current,
+        );
+      });
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(updateScale)
+        : null;
+    resizeObserver?.observe(titleWrap);
+    resizeObserver?.observe(titleMeasure);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateScale);
+      resizeObserver?.disconnect();
+    };
+  }, [title]);
+
+  if (spreadKey === "three_card") {
+    return <ThreeCardIntro onStart={onStart} />;
+  }
+
+  return (
+    <motion.div
+      className={`spread-intro-v2 spread-intro-v2--showcase spread-intro-v2--${spreadKey}`}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <h1
+        ref={titleWrapRef}
+        className="spread-intro-v2__title"
+        style={titleStyle}
+      >
+        <span className="spread-intro-v2__title-text">{title}</span>
+        <span
+          ref={titleMeasureRef}
+          className="spread-intro-v2__title-measure"
+          aria-hidden="true"
+        >
+          {title}
+        </span>
+      </h1>
+
+      <div className="spread-intro-v2__preview spread-intro-v2__preview--ornament">
+        <svg
+          className="spread-intro-v2__preview-svg"
+          viewBox={`0 0 ${layout.w} ${layout.h}`}
+          preserveAspectRatio="xMidYMid meet"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {layout.slots.map((slot, idx) => {
+            const number = idx + 1;
+            const cx = slot.x + CARD_W / 2;
+            const cy = slot.y + CARD_H / 2;
+            const imageX = cx - previewCardW / 2;
+            const transform = slot.rotate
+              ? `rotate(${slot.rotate} ${cx} ${cy})`
+              : undefined;
+            return (
+              <g key={idx} transform={transform}>
+                <image
+                  href="/tarot-back.jpg"
+                  x={imageX}
+                  y={slot.y}
+                  width={previewCardW}
+                  height={CARD_H}
+                  preserveAspectRatio="xMidYMid meet"
+                />
+                <g transform={`translate(${cx} ${cy})`} pointerEvents="none">
+                  <text
+                    x="0"
+                    y="0"
+                    dy="0.05em"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    alignmentBaseline="middle"
+                    fontFamily="Cormorant Garamond, Georgia, serif"
+                    fontWeight={700}
+                    fontSize={15}
+                    fontVariant="tabular-nums"
+                    style={{ fontFeatureSettings: "'tnum' 1, 'lnum' 1" }}
+                    fill="#151007"
+                    stroke="#e8d29e"
+                    strokeWidth={0.28}
+                    paintOrder="stroke"
+                  >
+                    {number}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div className="spread-intro-v2__frame">
+        <p
+          className="spread-intro-v2__story"
+          dangerouslySetInnerHTML={{ __html: config.intro }}
+        />
+      </div>
+
+      <motion.button
+        className="btn-primary spread-intro-v2__start-btn"
+        onClick={onStart}
+        whileTap={{ scale: 0.96 }}
+      >
+        Перейти к раскладу
       </motion.button>
     </motion.div>
   );

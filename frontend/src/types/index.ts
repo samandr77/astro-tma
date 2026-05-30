@@ -12,6 +12,48 @@ export interface UserProfile {
   created_at: string;
 }
 
+export interface PurchaseItem {
+  product_id: string;
+  product_name: string;
+  status: string;
+  stars_amount: number;
+  created_at: string | null;
+}
+
+export interface SubscriptionItem {
+  plan: string;
+  status: string;
+  stars_paid: number;
+  starts_at: string | null;
+  expires_at: string | null;
+  is_trial?: boolean;
+  trial_reason?: string | null;
+}
+
+export interface MyPurchasesResponse {
+  purchases: PurchaseItem[];
+  subscriptions: SubscriptionItem[];
+  active_subscription: SubscriptionItem | null;
+}
+
+export interface ReferralStats {
+  invited_total: number;
+  purchased: number;
+  days_earned: number;
+}
+
+export interface ReferralInfoResponse {
+  code: string;
+  invite_url: string;
+  stats: ReferralStats;
+}
+
+export interface ApplyReferralResponse {
+  success: boolean;
+  days_granted: number;
+  message: string;
+}
+
 export interface EnergyScores {
   love: number;
   career: number;
@@ -115,6 +157,58 @@ export interface NatalAspectData {
   orb: number;
 }
 
+export type NatalElementKey = "fire" | "earth" | "air" | "water";
+export type NatalModalityKey = "cardinal" | "fixed" | "mutable";
+
+export interface NatalElementsDistribution {
+  fire: number;
+  earth: number;
+  air: number;
+  water: number;
+  dominant: NatalElementKey;
+  dominant_ru: string;
+  deficient: NatalElementKey | null;
+  deficient_ru: string | null;
+}
+
+export interface NatalModalitiesDistribution {
+  cardinal: number;
+  fixed: number;
+  mutable: number;
+  dominant: NatalModalityKey;
+  dominant_ru: string;
+}
+
+export interface NatalDominantPlanet {
+  planet: string;
+  planet_ru: string;
+  score: number;
+  reason: string;
+}
+
+export interface NatalDominants {
+  elements: NatalElementsDistribution;
+  modalities: NatalModalitiesDistribution;
+  planet: NatalDominantPlanet;
+  retrograde_planets: string[];
+}
+
+export interface NatalHeroInfo {
+  headline: string;
+  subline: string;
+}
+
+export interface NatalHeroInfoMap {
+  elements: NatalHeroInfo;
+  planets: NatalHeroInfo;
+  houses: NatalHeroInfo;
+  aspects: NatalHeroInfo;
+}
+
+export interface NatalKeyAspect extends NatalAspectData {
+  key_score?: number;
+}
+
 export interface NatalSummaryResponse {
   has_chart: boolean;
   sun_sign: string | null;
@@ -131,6 +225,9 @@ export interface NatalSummaryResponse {
   planets?: Record<string, NatalPlanetData>;
   houses?: NatalHouseData[];
   aspects?: NatalAspectData[];
+  dominants?: NatalDominants | null;
+  key_aspects?: NatalKeyAspect[];
+  hero_info?: NatalHeroInfoMap | null;
 }
 
 export interface PlanetData {

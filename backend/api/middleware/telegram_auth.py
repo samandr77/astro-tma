@@ -83,11 +83,16 @@ async def get_tg_user(
         async def endpoint(tg_user: dict = Depends(get_tg_user)):
             user_id = tg_user["id"]
     """
-    # Dev-only auth bypass — requires AUTH_BYPASS=true AND non-production env.
-    # Lets you test the app in a regular browser without Telegram initData.
-    if settings.AUTH_BYPASS and not settings.is_production:
+    # Dev-only auth bypass. SECURITY_AUDIT.md C1: require an explicit
+    # APP_ENV=development match (not just "not production") so a typo in
+    # APP_ENV cannot silently re-enable the bypass.
+    if (
+        settings.AUTH_BYPASS
+        and settings.APP_ENV == "development"
+        and not settings.is_production
+    ):
         log.warning(
-            "auth.bypass_active",
+            "auth.bypass_active ⚠ DEV MODE — auth is OFF",
             user_id=settings.AUTH_BYPASS_USER_ID,
             env=settings.APP_ENV,
         )
@@ -99,6 +104,13 @@ async def get_tg_user(
             "language_code": "ru",
             "is_premium": False,
         }
+    if settings.AUTH_BYPASS and settings.is_production:
+        # Misconfiguration: AUTH_BYPASS=true in prod. Fail closed loudly.
+        log.error("auth.bypass_blocked_in_production")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Server misconfigured — refusing to serve",
+        )
 
     if not x_init_data:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing X-Init-Data header")

@@ -10,8 +10,8 @@ type SpreadType = 'three_card' | 'celtic_cross' | 'week' | 'relationship'
 const SPREAD_NAMES: Record<string, string> = {
   three_card: 'Прошлое · Настоящее · Будущее',
   celtic_cross: 'Кельтский крест',
-  week: 'Карта на каждый день',
-  relationship: 'Расклад на отношения',
+  week: 'Карты на неделю',
+  relationship: 'Отношения',
 }
 
 function formatDate(iso: string): string {

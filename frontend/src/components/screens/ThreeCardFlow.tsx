@@ -96,6 +96,16 @@ export function ThreeCardFlow({ onProgressChange }: ThreeCardFlowProps = {}) {
 
   const drawMutation = useMutation({
     mutationFn: () => tarotApi.draw("three_card"),
+    onError: (err) => {
+      // 429 = monthly rate limit hit — surface the server message.
+      const message = err instanceof Error ? err.message : String(err);
+      if (typeof window !== "undefined" && window.alert) {
+        // Telegram WebApp.showAlert can't be required here without dragging
+        // the @twa-dev/sdk import into this file; native confirm/alert is
+        // good enough on TMA + desktop.
+        window.alert(message);
+      }
+    },
   });
   const apiCards = drawMutation.data?.cards ?? [];
   const apiReady = apiCards.length >= 3;
@@ -235,7 +245,7 @@ export function ThreeCardFlow({ onProgressChange }: ThreeCardFlowProps = {}) {
 
   // Derived state for wheel appearance
   const isWheelSpinning = phase === "spinning" || phase === "fly-out";
-  const cardsVisible = isWheelSpinning;
+  const cardsVisible = isWheelSpinning || phase === "reading";
   const isFlying =
     phase === "fly-in" || phase === "revealed" || phase === "fly-out";
 

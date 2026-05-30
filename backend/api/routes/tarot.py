@@ -112,19 +112,16 @@ async def draw_tarot(
     """
     Draw a tarot spread.
     Free spreads: three_card (once per day).
-    Premium spreads: celtic_cross, week, relationship.
+    All spread types are free for every user — the lifetime/subscription
+    paywall on Tarot was removed by product. (PREMIUM_SPREADS / celtic
+    lifetime-limit checks intentionally skipped here.)
     """
     spread_type = body.spread_type
     user = await user_repo.get_by_id(db, tg_user["id"])
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
-    # Access control
-    if spread_type in PREMIUM_SPREADS:
-        is_prem = await user_repo.is_premium(db, user.id)
-        has_purchase = await user_repo.has_purchased(db, user.id, f"tarot_{spread_type}")
-        if not (is_prem or has_purchase):
-            raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, f"{spread_type} requires Premium")
+    from services.ratelimit import LIMITS, enforce_monthly_limit
 
     period_type = period_type_for_tarot(spread_type)
     latest_result = await db.execute(
@@ -139,6 +136,11 @@ async def draw_tarot(
     latest = latest_result.scalar_one_or_none()
     if latest and is_active_period(latest.created_at, period_type, now=now_utc()):
         return await _build_spread_response(db, latest, reused_existing=True)
+
+    # Monthly fair-use cap (don't count reused readings — only fresh draws).
+    await enforce_monthly_limit(
+        user.id, "tarot_draw", LIMITS["tarot_draw"], feature_ru="расклады Таро",
+    )
 
     # Load all card IDs
     result = await db.execute(select(TarotCard.id))
@@ -161,6 +163,23 @@ async def draw_tarot(
     await db.refresh(reading)
 
     return await _build_spread_response(db, reading)
+
+
+@router.get("/celtic/status")
+async def get_celtic_status(
+    tg_user: dict = Depends(get_tg_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Kept for frontend back-compat after the Celtic Cross paywall was
+    removed. Always reports that the spread is free and the gate is off."""
+    _ = tg_user, db  # parameters retained for the dependency contract
+    return {
+        "free_remaining": 99,
+        "free_limit": 99,
+        "has_purchased": False,
+        "is_premium": False,
+        "needs_gate": False,
+    }
 
 
 @router.get("/history", response_model=list[TarotHistoryItem])

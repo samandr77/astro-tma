@@ -7,7 +7,6 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, type PanInfo } from "framer-motion";
-import { PremiumGate } from "@/components/ui/PremiumGate";
 import { NatalBasicSkeleton } from "@/components/ui/Skeleton";
 import { useAppStore } from "@/stores/app";
 import { ApiError, natalApi } from "@/services/api";
@@ -18,6 +17,8 @@ import {
   type NatalSummaryResponse,
 } from "@/types";
 import { NatalChart, type NatalChartData } from "@/components/NatalChart";
+import { ZodiacIcon } from "@/components/ui/ZodiacIcon";
+import type { ZodiacSign } from "@/components/NatalChart/types";
 import { toNatalChartData } from "@/components/NatalChart/adapter";
 import { PlanetOrb } from "@/components/NatalChart/PlanetOrb";
 import { AspectOrb } from "@/components/NatalChart/AspectOrb";
@@ -26,6 +27,9 @@ import {
   type ElementId,
 } from "@/components/NatalChart/CosmicElementOrb";
 import { NatalDescriptionSheet } from "./NatalDescriptionSheet";
+import { useEntitlement } from "@/hooks/useEntitlement";
+import { usePayment } from "@/hooks/usePayment";
+import { useProductPrice } from "@/hooks/useProductPrice";
 import {
   ASPECT_FALLBACK_DESC,
   ASPECT_PAIR_FALLBACK_HINT,
@@ -34,6 +38,14 @@ import {
   PLANET_FALLBACK_DESC,
   TRAIT_FALLBACK_DESC,
 } from "@/utils/natalFallbacks";
+import { BigThreeBlock } from "@/components/natal/BigThreeBlock";
+import { DominantsBlock } from "@/components/natal/DominantsBlock";
+import { HeroInfo } from "@/components/natal/HeroInfo";
+import { KeyAspectsList } from "@/components/natal/KeyAspectsList";
+import type {
+  NatalElementKey,
+  NatalKeyAspect,
+} from "@/types";
 import styles from "./Natal.module.css";
 
 type NatalDescSelection = {
@@ -77,6 +89,15 @@ const HOUSE_AXIS_LABELS: Record<number, HouseAxisLabel> = {
   10: "Середина неба",
 };
 
+const ZODIAC_KEYS = new Set<string>([
+  "aries", "taurus", "gemini", "cancer", "leo", "virgo",
+  "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces",
+]);
+const toZodiacSign = (key: string | null | undefined): ZodiacSign | null =>
+  key && ZODIAC_KEYS.has(key) ? (key as ZodiacSign) : null;
+
+// Legacy unicode fallback table — kept only for non-icon contexts (e.g. card
+// title strings). Visual renders below should use <ZodiacIcon>.
 const ZODIAC_GLYPHS: Record<string, string> = {
   aries: "♈",
   taurus: "♉",
@@ -600,7 +621,7 @@ function getPdfDownloadError(error: unknown): string {
     return error.message || "Не удалось подготовить PDF.";
   }
 
-  return "Не удалось скачать PDF. Попробуйте ещё раз.";
+  return "Не удалось получить PDF. Попробуйте ещё раз.";
 }
 
 const ELEMENT_COLORS: Record<string, string> = {
@@ -1461,10 +1482,17 @@ function NatalKeyChips({
         )
       : "—";
 
-  const chips = [
+  const ascSign = toZodiacSign(signKey(summary?.ascendant_sign));
+  const chips: {
+    key: string;
+    glyph: React.ReactNode;
+    title: string;
+    sign: string;
+    degree: string;
+  }[] = [
     {
       key: "asc",
-      glyph: ZODIAC_GLYPHS[signKey(summary?.ascendant_sign)] ?? "AC",
+      glyph: ascSign ? <ZodiacIcon sign={ascSign} size={20} /> : "AC",
       title: "ASC",
       sign: toRu(summary?.ascendant_sign),
       degree: ascendantDegree,
@@ -1536,7 +1564,10 @@ function NatalHeroCard({
         <h2 className={styles.personName}>{displayName}</h2>
         <div className={styles.ascLine}>
           <span aria-hidden="true">
-            {ZODIAC_GLYPHS[signKey(subtitleSign)] ?? "☉"}
+            {(() => {
+              const s = toZodiacSign(signKey(subtitleSign));
+              return s ? <ZodiacIcon sign={s} size={18} /> : "☉";
+            })()}
           </span>
           <span>{subtitle}</span>
         </div>
@@ -1607,7 +1638,10 @@ function NatalBirthDetails({
         <h3>Ключевые акценты</h3>
         <div className={styles.highlightRow}>
           <span aria-hidden="true">
-            {ZODIAC_GLYPHS[signKey(summary?.ascendant_sign)] ?? "AC"}
+            {(() => {
+              const s = toZodiacSign(signKey(summary?.ascendant_sign));
+              return s ? <ZodiacIcon sign={s} size={18} /> : "AC";
+            })()}
           </span>
           <p>{ascendant}</p>
         </div>
@@ -1625,34 +1659,73 @@ function NatalBirthDetails({
 }
 
 function NatalPdfCard({
-  full,
+  hasChart,
   isDownloading,
   error,
   onDownload,
 }: {
-  full: NatalFullResponse | undefined;
+  hasChart: boolean;
   isDownloading: boolean;
   error: string | null;
   onDownload: () => void;
 }) {
-  if (!full) return null;
+  const entitled = useEntitlement("natal_full");
+  const price = useProductPrice("natal_full") ?? 149;
+  const {
+    purchase,
+    activating,
+    phase,
+    error: payError,
+  } = usePayment();
+  const paying = phase === "opening" || phase === "activating";
+
+  const handleClick = async () => {
+    if (!hasChart) return;
+    if (entitled) {
+      onDownload();
+      return;
+    }
+    const ok = await purchase("natal_full");
+    if (ok) onDownload();
+  };
+
+  const busy = isDownloading || paying;
+  let label: string;
+  if (!hasChart) {
+    label = "Сначала заполните данные рождения";
+  } else if (activating) {
+    label = "Активируем доступ…";
+  } else if (paying) {
+    label = "Открываем оплату…";
+  } else if (isDownloading) {
+    label = "Готовим PDF…";
+  } else if (entitled) {
+    label = "Получить полный отчёт (PDF)";
+  } else {
+    label = `Открыть отчёт — ${price} ⭐`;
+  }
 
   return (
     <section className={styles.pdfCard}>
       <motion.button
         type="button"
         className={styles.pdfButton}
-        onClick={onDownload}
-        disabled={isDownloading}
-        aria-busy={isDownloading}
-        whileTap={{ scale: isDownloading ? 1 : 0.98 }}
+        onClick={handleClick}
+        disabled={!hasChart || busy}
+        aria-busy={busy}
+        whileTap={{ scale: busy || !hasChart ? 1 : 0.98 }}
       >
         <IconDownload />
-        <span>
-          {isDownloading ? "Готовим PDF..." : "Скачать полный отчёт (PDF)"}
-        </span>
+        <span>{label}</span>
       </motion.button>
-      {error && <p className={styles.downloadError}>{error}</p>}
+      {!entitled && hasChart && !paying && (
+        <p className={styles.pdfHint}>
+          Премиум-доступ ко всей карте + PDF-отчёт. Также входит в Premium-подписку.
+        </p>
+      )}
+      {(error || payError) && (
+        <p className={styles.downloadError}>{error ?? payError}</p>
+      )}
     </section>
   );
 }
@@ -1669,12 +1742,14 @@ function NatalNoChartCard({
   return (
     <motion.div
       className={styles.referencePanel}
-      initial={{ opacity: 0, y: 16 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
     >
       <div className={styles.sectionKicker}>Базовый портрет</div>
       <div className={styles.basicSignRow}>
-        <span>{userSign?.emoji ?? "☉"}</span>
+        <span>
+          {userSign ? <ZodiacIcon sign={userSign.value} size={30} /> : "☉"}
+        </span>
         <div>
           <h2>{userSign?.label ?? toRu(sunSign)}</h2>
           <p>{userSign?.dates}</p>
@@ -1725,7 +1800,7 @@ function NatalElementsPanel({
   return (
     <motion.div
       className={styles.elementsPage}
-      initial={{ opacity: 0, y: 16 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
     >
       <div className={styles.sectionKicker}>Баланс стихий</div>
@@ -1835,7 +1910,7 @@ function NatalPlanetsPanel({
   return (
     <motion.div
       className={styles.planetsPage}
-      initial={{ opacity: 0, y: 16 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
     >
@@ -1936,7 +2011,7 @@ function NatalHousesPanel({
   return (
     <motion.div
       className={styles.housesPage}
-      initial={{ opacity: 0, y: 16 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
     >
@@ -1957,6 +2032,7 @@ function NatalHousesPanel({
             house.sign;
           const axisLabel = HOUSE_AXIS_LABELS[house.number];
           const glyph = ZODIAC_GLYPHS[houseSignKey] ?? "✦";
+          const houseZodiac = toZodiacSign(houseSignKey);
           const tone = ZODIAC_TONES[houseSignKey] ?? "gold";
           const desc = descriptions?.houses?.[String(house.number)];
           const subtitleParts = [signRu, formatDegree(house.degree)];
@@ -1984,7 +2060,7 @@ function NatalHousesPanel({
             >
               <span className={styles.houseNumber}>{house.number}</span>
               <span className={styles.houseGlyph} aria-hidden="true">
-                {glyph}
+                {houseZodiac ? <ZodiacIcon sign={houseZodiac} size={20} /> : glyph}
               </span>
               <span className={styles.houseCopy}>
                 <b>{signRu}</b>
@@ -2022,7 +2098,7 @@ function NatalAspectsPanel({
   return (
     <motion.section
       className={styles.aspectsPage}
-      initial={{ opacity: 0, y: 16 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
     >
@@ -2061,13 +2137,13 @@ function NatalAspectsPanel({
               );
               const name1 = aspectDisplayName(aspect.p1);
               const name2 = aspectDisplayName(aspect.p2);
-              const heading = `${name1} ${meta.symbol} ${name2} · орб ${aspect.orb.toFixed(1)}°`;
+              const heading = `**${name1} ${meta.symbol} ${name2} · орб ${aspect.orb.toFixed(1)}°**`;
               const hint =
                 ASPECT_PAIR_FALLBACK_HINT[type] ??
                 "взаимодействуют между собой";
               const fallback = `${name1} и ${name2} ${hint}. Подробнее эта пара раскроется в полном PDF-отчёте.`;
               const text = desc?.short ?? fallback;
-              blocks.push(`${heading}\n${text}`);
+              blocks.push(`${heading}\n\n${text}`);
             }
 
             return blocks.join("\n\n").trim() || null;
@@ -2186,6 +2262,99 @@ export function Natal() {
     null,
   );
 
+  const openBigThreeSheet = (kind: "sun" | "moon" | "ascendant") => {
+    const BIG_THREE_META: Record<
+      typeof kind,
+      { title: string; symbol: string; accent: string }
+    > = {
+      sun: { title: "Солнце", symbol: "☉", accent: "var(--gold)" },
+      moon: { title: "Луна", symbol: "☽", accent: "#c6d5e8" },
+      ascendant: { title: "Асцендент", symbol: "↗", accent: "#e8b4a8" },
+    };
+    const meta = BIG_THREE_META[kind];
+    const sign =
+      kind === "sun"
+        ? summary?.sun_sign
+        : kind === "moon"
+          ? summary?.moon_sign
+          : summary?.ascendant_sign;
+    const planetKey = kind === "ascendant" ? "ascendant" : kind;
+    const desc = descriptions?.planets?.[planetKey];
+    const body =
+      (desc as { short?: string; full?: string } | string | undefined) &&
+      typeof desc === "object"
+        ? ((desc as { full?: string; short?: string }).full ??
+          (desc as { full?: string; short?: string }).short ??
+          null)
+        : ((desc as unknown as string | undefined) ??
+          PLANET_FALLBACK_DESC[planetKey] ??
+          null);
+    setSelectedDesc({
+      title: meta.title,
+      subtitle: sign ?? undefined,
+      symbol: meta.symbol,
+      body,
+      accent: meta.accent,
+    });
+  };
+
+  const openDominantElement = (element: NatalElementKey) => {
+    const ELEMENT_TITLE: Record<NatalElementKey, string> = {
+      fire: "Огонь",
+      earth: "Земля",
+      air: "Воздух",
+      water: "Вода",
+    };
+    setSelectedDesc({
+      title: ELEMENT_TITLE[element],
+      symbol: "✦",
+      body: ELEMENT_FALLBACK_DESC[element] ?? null,
+    });
+  };
+
+  const openDominantModality = () => {
+    if (!summary?.dominants) return;
+    const mod = summary.dominants.modalities;
+    setSelectedDesc({
+      title: `${mod.dominant_ru} модальность`,
+      subtitle: "Как вы действуете и проявляетесь",
+      symbol: "✦",
+      body:
+        mod.dominant === "cardinal"
+          ? "Кардинальная модальность — про инициативу и старт. Вы быстро берётесь за новое, любите задавать темп и плохо переносите простой. Сильная сторона — лидерство; зона роста — доводить до конца, не бросать на середине."
+          : mod.dominant === "fixed"
+            ? "Фиксированная модальность — про устойчивость и глубину. Вы держите курс, доводите начатое, цените стабильность. Сильная сторона — надёжность; зона роста — гибкость, способность вовремя сменить тактику."
+            : "Мутабельная модальность — про адаптацию и переходы. Вы легко перестраиваетесь, ловите контекст, видите нюансы. Сильная сторона — гибкость; зона роста — выбрать одно направление и не распыляться.",
+    });
+  };
+
+  const openDominantPlanet = () => {
+    if (!summary?.dominants) return;
+    const planet = summary.dominants.planet;
+    setSelectedDesc({
+      title: `Доминирующая планета — ${planet.planet_ru}`,
+      subtitle: planet.reason,
+      symbol: "✦",
+      body:
+        PLANET_FALLBACK_DESC[planet.planet] ??
+        "Эта планета сильнее всего звучит в вашей карте: её темы будут возвращаться к вам в разных формах.",
+    });
+  };
+
+  const openKeyAspect = (a: NatalKeyAspect) => {
+    const aspectType = (a.aspect ?? "").toLowerCase();
+    setSelectedDesc({
+      title: `${a.p1} ${aspectType} ${a.p2}`,
+      subtitle:
+        typeof a.orb === "number" ? `Орб ${a.orb.toFixed(1)}°` : undefined,
+      symbol: "✦",
+      body:
+        ASPECT_FALLBACK_DESC[aspectType] ??
+        ASPECT_PAIR_FALLBACK_HINT[aspectType] ??
+        null,
+    });
+  };
+
   const sunSign = summary?.sun_sign ?? user?.sun_sign;
   const userSign = ZODIAC_SIGNS.find((s) => s.value === sunSign);
   const chartData = useMemo(
@@ -2246,7 +2415,7 @@ export function Natal() {
       return (
         <motion.div
           className={styles.referencePanel}
-          initial={{ opacity: 0, y: 16 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
         >
           <div className={styles.loadingState}>Вычисление полной карты...</div>
@@ -2258,7 +2427,7 @@ export function Natal() {
       return (
         <motion.div
           className={styles.referencePanel}
-          initial={{ opacity: 0, y: 16 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
         >
           <div className={styles.loadingState}>
@@ -2269,36 +2438,44 @@ export function Natal() {
     }
 
     return (
-      <PremiumGate
-        locked={false}
-        productId="natal_full"
-        productName="Полная натальная карта"
-        stars={150}
-      >
-        <>
-          {tab === "planets" && (
+      <>
+        {tab === "planets" && (
+          <>
+            <HeroInfo info={summary?.hero_info?.planets} eyebrow="Планеты" />
             <NatalPlanetsPanel
               full={full}
               descriptions={descriptions}
               onSelect={setSelectedDesc}
             />
-          )}
-          {tab === "houses" && (
+          </>
+        )}
+        {tab === "houses" && (
+          <>
+            <HeroInfo info={summary?.hero_info?.houses} eyebrow="Дома" />
             <NatalHousesPanel
               full={full}
               descriptions={descriptions}
               onSelect={setSelectedDesc}
             />
-          )}
-          {tab === "aspects" && (
+          </>
+        )}
+        {tab === "aspects" && (
+          <>
+            <HeroInfo info={summary?.hero_info?.aspects} eyebrow="Аспекты" />
+            {summary?.key_aspects && summary.key_aspects.length > 0 && (
+              <KeyAspectsList
+                aspects={summary.key_aspects}
+                onOpenAspect={openKeyAspect}
+              />
+            )}
             <NatalAspectsPanel
               full={full}
               descriptions={descriptions}
               onSelect={setSelectedDesc}
             />
-          )}
-        </>
-      </PremiumGate>
+          </>
+        )}
+      </>
     );
   };
 
@@ -2316,7 +2493,7 @@ export function Natal() {
         <>
           {chartData ? (
             <motion.div
-              initial={{ opacity: 0, y: 16 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.42, ease: "easeOut" }}
             >
@@ -2335,9 +2512,17 @@ export function Natal() {
             />
           )}
 
+          {summary?.has_chart && (
+            <BigThreeBlock
+              summary={summary}
+              onOpenSheet={openBigThreeSheet}
+              onOpenProfile={() => setScreen("profile")}
+            />
+          )}
+
           <NatalBirthDetails summary={summary} />
           <NatalPdfCard
-            full={full}
+            hasChart={summary?.has_chart ?? false}
             isDownloading={isPdfDownloading}
             error={pdfDownloadError}
             onDownload={handlePdfDownload}
@@ -2349,13 +2534,22 @@ export function Natal() {
     if (tab === "elements") {
       return (
         <>
+          <HeroInfo info={summary?.hero_info?.elements} eyebrow="Стихии" />
+          {summary?.dominants && (
+            <DominantsBlock
+              dominants={summary.dominants}
+              onOpenElement={openDominantElement}
+              onOpenModality={openDominantModality}
+              onOpenPlanet={openDominantPlanet}
+            />
+          )}
           <NatalElementsPanel
             summary={summary}
             slides={interpretationSlides}
             onSelect={setSelectedDesc}
           />
           <NatalPdfCard
-            full={full}
+            hasChart={summary?.has_chart ?? false}
             isDownloading={isPdfDownloading}
             error={pdfDownloadError}
             onDownload={handlePdfDownload}
@@ -2368,7 +2562,7 @@ export function Natal() {
       <>
         {renderFullPanel()}
         <NatalPdfCard
-          full={full}
+          hasChart={summary?.has_chart ?? false}
           isDownloading={isPdfDownloading}
           error={pdfDownloadError}
           onDownload={handlePdfDownload}

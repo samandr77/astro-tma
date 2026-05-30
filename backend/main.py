@@ -18,12 +18,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from api.routes import (
+    admin_stars,
     glossary,
     horoscope,
     mac,
     natal,
     news,
     payments,
+    referrals,
     synastry,
     tarot,
     transits,
@@ -161,6 +163,8 @@ app.include_router(transits.router,      prefix="/api")
 app.include_router(synastry.router,      prefix="/api")
 app.include_router(glossary.router,      prefix="/api")
 app.include_router(news.router,          prefix="/api")
+app.include_router(referrals.router,     prefix="/api")
+app.include_router(admin_stars.router,   prefix="/api")
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────

@@ -213,6 +213,7 @@ export function CelticCrossFlow({ readingId, cards }: Props) {
   const containerPadded = phase === 'idle' || phase === 'shuffle' || phase === 'fan'
   const isRevealCta =
     phase === 'reading' && !isAllRevealed && !isAutoRevealing
+  const showRemainingDeck = phase === 'reading' || phase === 'complete'
 
   return (
     <div
@@ -335,35 +336,49 @@ export function CelticCrossFlow({ readingId, cards }: Props) {
         <p className={styles.promptCta}>{prompt}</p>
       )}
 
-      {/* ── Deck (idle + shuffle phases) ── */}
-      {(phase === 'idle' || phase === 'shuffle') && (
-        <div className={styles.deckWrap}>
-          <div
-            className={`${styles.deck} ${phase === 'shuffle' ? styles.deckShuffling : ''}`}
-            onClick={handleDeckClick}
-          >
-            {[3, 2, 1, 0].map((i) => (
+      {/* ── Deck (stays on the table after the draw) ── */}
+      {(phase === 'idle' || phase === 'shuffle' || showRemainingDeck) && (
+        <div
+          className={`${styles.deckWrap} ${
+            showRemainingDeck ? styles.deckWrapSettled : ''
+          }`}
+        >
+          {showRemainingDeck ? (
+            <div className={styles.remainingDeck} aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={styles.remainingCard}>
+                  <TarotCardBack />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              className={`${styles.deck} ${phase === 'shuffle' ? styles.deckShuffling : ''}`}
+              onClick={handleDeckClick}
+            >
+              {[3, 2, 1, 0].map((i) => (
+                <div
+                  key={i}
+                  className={styles.deckLayer}
+                  style={{
+                    left: i * 2,
+                    top: i * 2,
+                    zIndex: 4 - i,
+                    opacity: 0.55 + i * 0.12,
+                  }}
+                >
+                  <TarotCardBack />
+                </div>
+              ))}
               <div
-                key={i}
                 className={styles.deckLayer}
-                style={{
-                  left: i * 2,
-                  top: i * 2,
-                  zIndex: 4 - i,
-                  opacity: 0.55 + i * 0.12,
-                }}
+                style={{ left: 7, top: 7, zIndex: 10 }}
               >
                 <TarotCardBack />
               </div>
-            ))}
-            <div
-              className={styles.deckLayer}
-              style={{ left: 7, top: 7, zIndex: 10 }}
-            >
-              <TarotCardBack />
             </div>
-          </div>
-          {phase === 'idle' && (
+          )}
+          {(phase === 'idle' || showRemainingDeck) && (
             <span className={styles.deckLabel}>КОЛОДА</span>
           )}
         </div>

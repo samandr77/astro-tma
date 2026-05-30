@@ -25,7 +25,9 @@ export type Screen =
   | "glossary"
   | "glossary_term"
   | "news"
-  | "news_detail";
+  | "news_detail"
+  | "referral"
+  | "purchases";
 
 interface AppState {
   screen: Screen;

@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&display=swap');
+
+.screen {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #060718;
+  overflow: hidden;
+}
+
+/* Космический фон со звёздами + туманностями — на весь экран */
+.bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Квадратный стек слоёв колеса */
+.wheel {
+  position: relative;
+  width: 350px;
+  height: 350px;
+  max-width: 92vw;
+  max-height: 92vw;
+  z-index: 1;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Анимации вращения и пульса */
+.spinCw70  { animation: zSpinCw  70s  linear infinite; transform-origin: 50% 50%; }
+.spinCw150 { animation: zSpinCw  150s linear infinite; transform-origin: 50% 50%; }
+.spinCcw90 { animation: zSpinCcw 90s  linear infinite; transform-origin: 50% 50%; }
+.pulseSun  { animation: zPulseSun 4.4s ease-in-out infinite; transform-origin: 50% 50%; }
+
+@keyframes zSpinCw  { to { transform: rotate(360deg);  } }
+@keyframes zSpinCcw { to { transform: rotate(-360deg); } }
+@keyframes zPulseSun {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.05); }
+}
+
+/* Подпись под колесом */
+.footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+  pointer-events: none;
+}
+
+.title {
+  margin: 0;
+  font-family: "Cinzel", "Della Respira", Georgia, serif;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  color: #E8C862;
+  animation: zShimmer 4s ease-in-out infinite;
+  text-shadow:
+    0 0 18px rgba(232, 200, 98, 0.7),
+    0 0 45px rgba(232, 200, 98, 0.35);
+}
+
+.dots {
+  display: flex;
+  gap: 9px;
+}
+.dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(232, 200, 98, 0.65);
+  animation: zDotPulse 1.4s ease-in-out infinite;
+}
+.dots span:nth-child(2) { animation-delay: 0.22s; }
+.dots span:nth-child(3) { animation-delay: 0.44s; }
+
+@keyframes zShimmer {
+  0%, 100% { opacity: 0.88; }
+  50%      { opacity: 1;    }
+}
+@keyframes zDotPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}

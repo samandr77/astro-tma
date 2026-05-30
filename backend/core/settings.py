@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
     # App
@@ -43,9 +43,11 @@ class Settings(BaseSettings):
     CACHE_TTL_NATAL: int = 604800       # 7d — natal never changes
     CACHE_TTL_TAROT_INTERPRET: int = 2592000  # 30d — readings are immutable
 
-    # Admin panel
-    ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "changeme"
+    # Admin panel — no defaults. If these are missing from .env, Pydantic
+    # fails loudly at startup instead of booting with weak well-known creds
+    # (SECURITY_AUDIT.md C2).
+    ADMIN_USERNAME: str
+    ADMIN_PASSWORD: str
 
     # Anthropic
     ANTHROPIC_API_KEY: str = ""
@@ -53,16 +55,24 @@ class Settings(BaseSettings):
     # GeoNames
     GEONAMES_USERNAME: str = "demo"
 
-    # Stars pricing
-    PRICE_HOROSCOPE_TOMORROW: int = 25
-    PRICE_HOROSCOPE_WEEK: int = 50
-    PRICE_HOROSCOPE_MONTH: int = 75
-    PRICE_TAROT_CELTIC: int = 30
-    PRICE_TAROT_WEEK: int = 40
-    PRICE_NATAL_FULL: int = 150
-    PRICE_SYNASTRY: int = 100
-    PRICE_SUBSCRIPTION_MONTH: int = 299
-    PRICE_SUBSCRIPTION_YEAR: int = 1990
+    # Stars pricing — boot defaults match the launch monetization spec.
+    # Production prices live in .env / admin Redis overrides.
+    PRICE_TAROT_CELTIC: int = 29  # retired SKU, kept for back-compat
+    PRICE_NATAL_FULL: int = 149
+    PRICE_SYNASTRY: int = 79  # bumped from 49 (see UNIT_ECONOMICS.md §6)
+    PRICE_SUBSCRIPTION_MONTH: int = 199
+    PRICE_SUBSCRIPTION_YEAR: int = 1490
+
+    # Feature flags for launch pack — easy off-switch if something goes wrong.
+    FEATURE_WELCOME_TRIAL: bool = True
+    FEATURE_REFERRAL_PROGRAM: bool = True
+    WELCOME_TRIAL_DAYS: int = 3
+    REFERRAL_TRIAL_EXTENSION_DAYS: int = 4  # 3 + 4 = 7 total
+    REFERRAL_FIRST_PURCHASE_BONUS_DAYS: int = 14
+
+    # URL of the bot WebApp deeplink (e.g. "https://t.me/<bot>/app").
+    # Used in referrer-reward Telegram notifications.
+    MINIAPP_URL: str = ""
 
     # Feature flags
     FEATURE_PUSH_NOTIFICATIONS: bool = True
@@ -79,6 +89,29 @@ class Settings(BaseSettings):
     def secret_key_length(cls, v: str) -> str:
         if len(v) < 32:
             raise ValueError("APP_SECRET_KEY must be at least 32 characters")
+        return v
+
+    @field_validator("TELEGRAM_WEBHOOK_SECRET")
+    @classmethod
+    def webhook_secret_strength(cls, v: str) -> str:
+        """SECURITY_AUDIT.md C3 — an empty TELEGRAM_WEBHOOK_SECRET turns the
+        payments webhook into an open endpoint (anyone can POST a fake
+        successful_payment). Require at least 16 chars of entropy."""
+        if not v or len(v) < 16:
+            raise ValueError(
+                "TELEGRAM_WEBHOOK_SECRET must be set and at least 16 chars long"
+            )
+        return v
+
+    @field_validator("ADMIN_PASSWORD")
+    @classmethod
+    def admin_password_strength(cls, v: str) -> str:
+        """SECURITY_AUDIT.md C2 — reject the historic 'changeme' default and
+        any obviously short password, even when read from .env."""
+        if not v or len(v) < 12 or v.lower() in {"changeme", "admin", "password"}:
+            raise ValueError(
+                "ADMIN_PASSWORD is missing or too weak — set ≥12 random chars"
+            )
         return v
 
     @property

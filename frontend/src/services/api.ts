@@ -23,6 +23,11 @@ type NatalPdfLinkResponse = {
   expires_in: number;
 };
 
+type NatalPdfSendResponse = {
+  sent: boolean;
+  message_id: number | null;
+};
+
 type UserProfile = import("@/types").UserProfile;
 type NatalSummaryResponse = import("@/types").NatalSummaryResponse;
 type NatalFullResponse = import("@/types").NatalFullResponse;
@@ -67,10 +72,6 @@ function apiUrl(path: string): string {
   return `${BASE_URL}${suffix}`;
 }
 
-function absoluteUrl(url: string): string {
-  return new URL(url, window.location.origin).toString();
-}
-
 function openDownloadWindow(): Window | null {
   try {
     const popup = window.open("about:blank", "_blank");
@@ -101,8 +102,8 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function canUseTelegramOpenLink(): boolean {
-  return Boolean(WebApp.initData) && typeof WebApp.openLink === "function";
+function canUseTelegramChatDelivery(): boolean {
+  return Boolean(WebApp.initData);
 }
 
 function shouldUseLocalDevFixtures(): boolean {
@@ -333,6 +334,20 @@ const localDevDescriptions: NatalDescriptionsResponse = {
   })),
 };
 
+const LOCAL_DEV_PDF_BYTES = new Uint8Array([
+  0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x31, 0x20, 0x30,
+  0x20, 0x6f, 0x62, 0x6a, 0x0a, 0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65,
+  0x2f, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, 0x2f, 0x50, 0x61, 0x67,
+  0x65, 0x73, 0x20, 0x32, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, 0x65,
+  0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, 0x32, 0x20, 0x30, 0x20, 0x6f, 0x62,
+  0x6a, 0x0a, 0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65, 0x2f, 0x50, 0x61,
+  0x67, 0x65, 0x73, 0x2f, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x20, 0x30, 0x3e,
+  0x3e, 0x0a, 0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, 0x74, 0x72, 0x61,
+  0x69, 0x6c, 0x65, 0x72, 0x0a, 0x3c, 0x3c, 0x2f, 0x52, 0x6f, 0x6f, 0x74,
+  0x20, 0x31, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, 0x25, 0x25, 0x45,
+  0x4f, 0x46, 0x0a,
+]);
+
 function withLocalDevBirthData(
   user: UserProfile,
   body: {
@@ -402,24 +417,22 @@ async function requestLocalDevFixture<T>(
     return localDevDescriptions as T;
   }
 
-  return undefined;
-}
-
-async function openTemporaryPdfLink(filename: string): Promise<void> {
-  const link = await request<NatalPdfLinkResponse>("POST", "/natal/pdf-link");
-  const downloadUrl = apiUrl(link.download_url);
-  const absoluteDownloadUrl = absoluteUrl(downloadUrl);
-
-  if (canUseTelegramOpenLink()) {
-    try {
-      WebApp.openLink(absoluteDownloadUrl);
-      return;
-    } catch {
-      // Fall through to a browser-style download if Telegram rejects the link.
-    }
+  if (path === "/natal/pdf-link" && method === "POST") {
+    return {
+      download_url: "/natal/pdf",
+      filename: "natal-chart-dev.pdf",
+      expires_in: 300,
+    } as T;
   }
 
-  triggerDownload(downloadUrl, link.filename || filename);
+  if (path === "/natal/pdf-send" && method === "POST") {
+    return {
+      sent: true,
+      message_id: 42,
+    } as T;
+  }
+
+  return undefined;
 }
 
 async function request<T>(
@@ -463,6 +476,10 @@ async function request<T>(
 }
 
 async function requestBlob(path: string): Promise<Blob> {
+  if (shouldUseLocalDevFixtures() && path === "/natal/pdf") {
+    return new Blob([LOCAL_DEV_PDF_BYTES], { type: "application/pdf" });
+  }
+
   const response = await fetch(`${BASE_URL}${path}`, {
     method: "GET",
     headers: {
@@ -505,6 +522,11 @@ export const usersApi = {
     request<import("@/types").UserProfile>("PATCH", "/users/me/push", {
       enabled,
     }),
+  getPurchases: () =>
+    request<import("@/types").MyPurchasesResponse>(
+      "GET",
+      "/users/me/purchases",
+    ),
 };
 
 // ── Horoscope ──────────────────────────────────────────────────────────────────
@@ -545,8 +567,8 @@ export const natalApi = {
   downloadPdf: async () => {
     const filename = "natal-chart.pdf";
 
-    if (canUseTelegramOpenLink()) {
-      await openTemporaryPdfLink(filename);
+    if (canUseTelegramChatDelivery()) {
+      await request<NatalPdfSendResponse>("POST", "/natal/pdf-send");
       return;
     }
 
@@ -616,6 +638,14 @@ export const tarotApi = {
     ),
   history: () =>
     request<import("@/types").TarotHistoryItem[]>("GET", "/tarot/history"),
+  celticStatus: () =>
+    request<{
+      free_remaining: number;
+      free_limit: number;
+      has_purchased: boolean;
+      is_premium: boolean;
+      needs_gate: boolean;
+    }>("GET", "/tarot/celtic/status"),
   getReading: (reading_id: number) =>
     request<import("@/types").TarotSpreadResponse>(
       "GET",
@@ -720,6 +750,15 @@ export const macApi = {
     request<import("@/types").MacPickResponse>("POST", "/mac/pick", body),
   picks: () =>
     request<import("@/types").MacPickHistoryItem[]>("GET", "/mac/picks"),
+};
+
+export const referralsApi = {
+  getMe: () =>
+    request<import("@/types").ReferralInfoResponse>("GET", "/referrals/me"),
+  apply: (code: string) =>
+    request<import("@/types").ApplyReferralResponse>("POST", "/referrals/apply", {
+      code,
+    }),
 };
 
 export const paymentsApi = {

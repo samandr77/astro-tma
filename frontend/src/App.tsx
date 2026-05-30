@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { BottomNav } from "@/components/ui/BottomNav";
-import { usersApi } from "@/services/api";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { TrialEndingModal } from "@/components/ui/TrialEndingModal";
+import { referralsApi, usersApi } from "@/services/api";
 import { useAppStore } from "@/stores/app";
 import { useStartParam, useTelegramReady } from "@/hooks/useTelegram";
-import { LoadingScreenFull } from "@/components/screens/LoadingScreen";
+import { LoadingScreenZodiac } from "@/components/screens/LoadingScreenZodiac";
 
 const Onboarding = lazy(() =>
   import("@/components/screens/Onboarding").then((m) => ({
@@ -80,6 +82,16 @@ const NewsDetail = lazy(() =>
     default: m.NewsDetail,
   })),
 );
+const Referral = lazy(() =>
+  import("@/components/screens/Referral").then((m) => ({
+    default: m.Referral,
+  })),
+);
+const Purchases = lazy(() =>
+  import("@/components/screens/Purchases").then((m) => ({
+    default: m.Purchases,
+  })),
+);
 
 function SplashScreen() {
   return (
@@ -89,15 +101,24 @@ function SplashScreen() {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6, ease: "easeInOut" }}
     >
-      <LoadingScreenFull />
+      <LoadingScreenZodiac />
     </motion.div>
+  );
+}
+
+function RouteFallback() {
+  return (
+    <div className="screen-container">
+      <div className="screen route-fallback-screen">
+        <LoadingSpinner message="Открываем раздел..." />
+      </div>
+    </div>
   );
 }
 
 export default function App() {
   const {
     screen,
-    navDirection,
     setScreen,
     onboardingComplete,
     setOnboardingComplete,
@@ -110,6 +131,8 @@ export default function App() {
   useTelegramReady();
   const startParam = useStartParam();
   const [inviteHandled, setInviteHandled] = useState(false);
+  const [referralHandled, setReferralHandled] = useState(false);
+  const queryClient = useQueryClient();
 
   const syncUser = useMutation({
     mutationFn: usersApi.upsertMe,
@@ -128,7 +151,7 @@ export default function App() {
 
   useEffect(() => {
     syncUser.mutate();
-    const timer = setTimeout(() => setReady(true), 3500);
+    const timer = setTimeout(() => setReady(true), 5000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -143,6 +166,31 @@ export default function App() {
       }
     }
   }, [startParam, pendingInviteToken, setPendingInviteToken]);
+
+  // Referral deep-link: redeem the code once `users.me` has synced so the
+  // user row already exists on the backend. Idempotent — backend silently
+  // ignores a code that was already applied.
+  useEffect(() => {
+    if (referralHandled || !synced) return;
+    if (!startParam?.startsWith("ref_")) return;
+    const code = startParam.slice(4);
+    if (!code) {
+      setReferralHandled(true);
+      return;
+    }
+    setReferralHandled(true);
+    referralsApi
+      .apply(code)
+      .then((result) => {
+        if (result.success) {
+          queryClient.invalidateQueries({ queryKey: ["my-purchases"] });
+          queryClient.invalidateQueries({ queryKey: ["referral-me"] });
+        }
+      })
+      .catch(() => {
+        /* silent — code may already be applied */
+      });
+  }, [startParam, synced, referralHandled, queryClient]);
 
   // After both splash timer and sync are done, route the onboarded user.
   // If they have a pending invite waiting, jump straight to the invite
@@ -194,38 +242,38 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <div className="app">
-        <Suspense fallback={null}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={screen}
-              className="screen-container"
-              initial={{ opacity: 0, x: navDirection === "back" ? -20 : 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: navDirection === "back" ? 20 : -20 }}
-              transition={{ duration: 0.22, ease: "easeInOut" }}
-            >
-              {screen === "onboarding" && <Onboarding />}
-              {screen === "home" && <Home />}
-              {screen === "horoscopes" && <Horoscopes />}
-              {screen === "discover" && <Discover />}
-              {screen === "premium" && <Premium />}
-              {screen === "tarot" && <Tarot />}
-              {screen === "moon" && <Moon />}
-              {screen === "natal" && <Natal />}
-              {screen === "mac" && <Mac />}
-              {screen === "profile" && <Profile />}
-              {screen === "transits" && <Transits />}
-              {screen === "synastry" && <Synastry />}
-              {screen === "synastry_invite" && <SynastryInvite />}
-              {screen === "glossary" && <Glossary />}
-              {screen === "glossary_term" && <GlossaryTerm />}
-              {screen === "news" && <News />}
-              {screen === "news_detail" && <NewsDetail />}
-            </motion.div>
-          </AnimatePresence>
+        <Suspense fallback={<RouteFallback />}>
+          <motion.div
+            key={screen}
+            className="screen-container"
+            initial={false}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+          >
+            {screen === "onboarding" && <Onboarding />}
+            {screen === "home" && <Home />}
+            {screen === "horoscopes" && <Horoscopes />}
+            {screen === "discover" && <Discover />}
+            {screen === "premium" && <Premium />}
+            {screen === "tarot" && <Tarot />}
+            {screen === "moon" && <Moon />}
+            {screen === "natal" && <Natal />}
+            {screen === "mac" && <Mac />}
+            {screen === "profile" && <Profile />}
+            {screen === "transits" && <Transits />}
+            {screen === "synastry" && <Synastry />}
+            {screen === "synastry_invite" && <SynastryInvite />}
+            {screen === "glossary" && <Glossary />}
+            {screen === "glossary_term" && <GlossaryTerm />}
+            {screen === "news" && <News />}
+            {screen === "news_detail" && <NewsDetail />}
+            {screen === "referral" && <Referral />}
+            {screen === "purchases" && <Purchases />}
+          </motion.div>
         </Suspense>
 
         {showNav && <BottomNav />}
+        {synced && onboardingComplete && <TrialEndingModal />}
       </div>
     </MotionConfig>
   );
