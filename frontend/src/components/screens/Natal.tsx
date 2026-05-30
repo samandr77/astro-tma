@@ -621,7 +621,7 @@ function getPdfDownloadError(error: unknown): string {
     return error.message || "Не удалось подготовить PDF.";
   }
 
-  return "Не удалось скачать PDF. Попробуйте ещё раз.";
+  return "Не удалось получить PDF. Попробуйте ещё раз.";
 }
 
 const ELEMENT_COLORS: Record<string, string> = {
@@ -1700,7 +1700,7 @@ function NatalPdfCard({
   } else if (isDownloading) {
     label = "Готовим PDF…";
   } else if (entitled) {
-    label = "Скачать полный отчёт (PDF)";
+    label = "Получить полный отчёт (PDF)";
   } else {
     label = `Открыть отчёт — ${price} ⭐`;
   }

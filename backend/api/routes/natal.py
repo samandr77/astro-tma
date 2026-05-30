@@ -4,6 +4,7 @@ from secrets import token_urlsafe
 from typing import Any
 from urllib.parse import quote
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -206,6 +207,41 @@ async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
             ),
         },
     )
+
+
+async def _send_natal_pdf_to_chat(db: AsyncSession, user) -> int | None:
+    response = await _build_natal_pdf_response(db, user)
+    filename = _natal_pdf_filename(user)
+    url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendDocument"
+    data = {
+        "chat_id": user.id,
+        "caption": "Ваш полный PDF-отчёт по натальной карте",
+    }
+    files = {
+        "document": (filename, response.body, "application/pdf"),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            tg_response = await client.post(url, data=data, files=files)
+        payload = tg_response.json()
+    except Exception as e:
+        log.error("natal.pdf_send_failed", user_id=user.id, error=str(e))
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Не удалось отправить PDF в Telegram",
+        ) from e
+
+    if not payload.get("ok"):
+        description = str(payload.get("description") or "Telegram API error")
+        log.error("natal.pdf_send_rejected", user_id=user.id, error=description)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Не удалось отправить PDF в Telegram",
+        )
+
+    message_id = payload.get("result", {}).get("message_id")
+    return int(message_id) if isinstance(message_id, int) else None
 
 
 @router.get("/summary")
@@ -439,6 +475,17 @@ async def create_natal_pdf_link(
         "filename": _natal_pdf_filename(user),
         "expires_in": _PDF_DOWNLOAD_TTL_SECONDS,
     }
+
+
+@router.post("/pdf-send")
+async def send_natal_pdf_to_chat(
+    tg_user: dict = Depends(get_tg_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate natal PDF and send it to the user's Telegram chat as a document."""
+    user = await _get_pdf_user_or_error(db, tg_user["id"])
+    message_id = await _send_natal_pdf_to_chat(db, user)
+    return {"sent": True, "message_id": message_id}
 
 
 @router.get("/pdf-download/{token}")

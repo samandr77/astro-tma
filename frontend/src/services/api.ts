@@ -23,6 +23,11 @@ type NatalPdfLinkResponse = {
   expires_in: number;
 };
 
+type NatalPdfSendResponse = {
+  sent: boolean;
+  message_id: number | null;
+};
+
 type UserProfile = import("@/types").UserProfile;
 type NatalSummaryResponse = import("@/types").NatalSummaryResponse;
 type NatalFullResponse = import("@/types").NatalFullResponse;
@@ -67,10 +72,6 @@ function apiUrl(path: string): string {
   return `${BASE_URL}${suffix}`;
 }
 
-function absoluteUrl(url: string): string {
-  return new URL(url, window.location.origin).toString();
-}
-
 function openDownloadWindow(): Window | null {
   try {
     const popup = window.open("about:blank", "_blank");
@@ -101,8 +102,8 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function canUseTelegramOpenLink(): boolean {
-  return Boolean(WebApp.initData) && typeof WebApp.openLink === "function";
+function canUseTelegramChatDelivery(): boolean {
+  return Boolean(WebApp.initData);
 }
 
 function shouldUseLocalDevFixtures(): boolean {
@@ -424,24 +425,14 @@ async function requestLocalDevFixture<T>(
     } as T;
   }
 
-  return undefined;
-}
-
-async function openTemporaryPdfLink(filename: string): Promise<void> {
-  const link = await request<NatalPdfLinkResponse>("POST", "/natal/pdf-link");
-  const downloadUrl = apiUrl(link.download_url);
-  const absoluteDownloadUrl = absoluteUrl(downloadUrl);
-
-  if (canUseTelegramOpenLink()) {
-    try {
-      WebApp.openLink(absoluteDownloadUrl);
-      return;
-    } catch {
-      // Fall through to a browser-style download if Telegram rejects the link.
-    }
+  if (path === "/natal/pdf-send" && method === "POST") {
+    return {
+      sent: true,
+      message_id: 42,
+    } as T;
   }
 
-  triggerDownload(downloadUrl, link.filename || filename);
+  return undefined;
 }
 
 async function request<T>(
@@ -576,8 +567,8 @@ export const natalApi = {
   downloadPdf: async () => {
     const filename = "natal-chart.pdf";
 
-    if (canUseTelegramOpenLink()) {
-      await openTemporaryPdfLink(filename);
+    if (canUseTelegramChatDelivery()) {
+      await request<NatalPdfSendResponse>("POST", "/natal/pdf-send");
       return;
     }
 

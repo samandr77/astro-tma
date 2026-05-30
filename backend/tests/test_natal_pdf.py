@@ -197,6 +197,77 @@ async def test_natal_pdf_token_download_does_not_require_telegram_auth(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_send_natal_pdf_to_chat_uploads_pdf_document(monkeypatch):
+    from api.routes import natal
+
+    user = SimpleNamespace(id=1001, tg_first_name="Андрей")
+    response = Response(content=b"%PDF-test", media_type="application/pdf")
+    captured = {}
+
+    class FakeHttpResponse:
+        def json(self):
+            return {"ok": True, "result": {"message_id": 42}}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, data, files):
+            captured["url"] = url
+            captured["data"] = data
+            captured["files"] = files
+            return FakeHttpResponse()
+
+    async def fake_build_response(_db, passed_user):
+        assert passed_user is user
+        return response
+
+    monkeypatch.setattr(natal.settings, "TELEGRAM_BOT_TOKEN", "bot-token")
+    monkeypatch.setattr(natal, "_build_natal_pdf_response", fake_build_response)
+    monkeypatch.setattr(natal.httpx, "AsyncClient", FakeAsyncClient)
+
+    message_id = await natal._send_natal_pdf_to_chat(object(), user)
+
+    assert message_id == 42
+    assert captured["url"] == "https://api.telegram.org/botbot-token/sendDocument"
+    assert captured["data"] == {
+        "chat_id": 1001,
+        "caption": "Ваш полный PDF-отчёт по натальной карте",
+    }
+    assert captured["files"] == {
+        "document": ("natal_Андрей.pdf", b"%PDF-test", "application/pdf"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_send_natal_pdf_endpoint_returns_sent_payload(monkeypatch):
+    from api.routes import natal
+
+    user = SimpleNamespace(id=1001, tg_first_name="Андрей")
+
+    async def fake_get_user(_db, user_id):
+        assert user_id == 1001
+        return user
+
+    async def fake_send(_db, passed_user):
+        assert passed_user is user
+        return 42
+
+    monkeypatch.setattr(natal, "_get_pdf_user_or_error", fake_get_user)
+    monkeypatch.setattr(natal, "_send_natal_pdf_to_chat", fake_send)
+
+    payload = await natal.send_natal_pdf_to_chat(tg_user={"id": 1001}, db=object())
+
+    assert payload == {"sent": True, "message_id": 42}
+
+
+@pytest.mark.asyncio
 async def test_pdf_reading_is_generated_when_full_chart_cache_is_cold(monkeypatch):
     from api.routes import natal
 
