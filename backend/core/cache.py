@@ -54,6 +54,9 @@ def key_natal(user_id: int) -> str:
 def key_natal_pdf_download(token: str) -> str:
     return f"natal:pdf-download:{token}"
 
+def key_destiny_pdf_download(token: str) -> str:
+    return f"destiny:pdf-download:{token}"
+
 def key_moon(date: str) -> str:
     return f"moon:{date}"
 

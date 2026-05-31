@@ -64,6 +64,8 @@ jobs:
           TELEGRAM_WEBHOOK_URL: 'https://example.com/webhook'
           DATABASE_URL: 'postgresql+asyncpg://astro:testpassword@localhost:5432/astro_tma_test'
           REDIS_URL: 'redis://localhost:6379/0'
+          ADMIN_USERNAME: 'ci-admin'
+          ADMIN_PASSWORD: 'ci-admin-password-32-chars!!'
           GEONAMES_USERNAME: 'demo'
         run: pytest tests/ -v --cov=services --cov-report=xml
 

@@ -4,6 +4,8 @@ import {
   SPREAD_CONFIG,
   CARD_W,
   CARD_H,
+  SLOT_W,
+  SLOT_H,
   type SpreadKey,
 } from "@/data/spread-config";
 
@@ -60,7 +62,7 @@ export function SpreadIntro({ spreadKey, onStart }: Props) {
 
   const config = SPREAD_CONFIG[spreadKey];
   const { layout, title } = config;
-  const previewCardW = CARD_H * (794 / 1551);
+  const previewCardW = CARD_W;
   const titleStyle = {
     "--spread-title-scale": titleScale,
   } as CSSProperties;
@@ -139,8 +141,8 @@ export function SpreadIntro({ spreadKey, onStart }: Props) {
         >
           {layout.slots.map((slot, idx) => {
             const number = idx + 1;
-            const cx = slot.x + CARD_W / 2;
-            const cy = slot.y + CARD_H / 2;
+            const cx = slot.x + SLOT_W / 2;
+            const cy = slot.y + SLOT_H / 2;
             const imageX = cx - previewCardW / 2;
             const transform = slot.rotate
               ? `rotate(${slot.rotate} ${cx} ${cy})`
@@ -150,7 +152,7 @@ export function SpreadIntro({ spreadKey, onStart }: Props) {
                 <image
                   href="/tarot-back.jpg"
                   x={imageX}
-                  y={slot.y}
+                  y={cy - CARD_H / 2}
                   width={previewCardW}
                   height={CARD_H}
                   preserveAspectRatio="xMidYMid meet"

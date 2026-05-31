@@ -15,8 +15,9 @@ Raises HTTPException(429) with a Russian message + the reset date.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 from fastapi import HTTPException, status
 
@@ -63,7 +64,7 @@ async def get_monthly_usage(user_id: int, key: str) -> int:
     """Read current month's counter (0 if absent). No mutation."""
     redis = get_redis()
     bucket, _ = _month_bucket()
-    raw = await cast(object, redis.get(f"rl:{key}:{user_id}:{bucket}"))
+    raw = await cast(Awaitable[Any], redis.get(f"rl:{key}:{user_id}:{bucket}"))
     try:
         return int(raw) if raw is not None else 0
     except (TypeError, ValueError):
@@ -94,14 +95,14 @@ async def enforce_monthly_limit(
     pipe = redis.pipeline()
     pipe.incr(redis_key)
     pipe.expire(redis_key, ttl)
-    results = await cast(object, pipe.execute())
+    results = await cast(Awaitable[list[Any]], pipe.execute())
     used = int(results[0]) if results else 0
 
     if used > limit:
         # Roll back our increment so the user doesn't lose a slot for
         # a request we're about to deny anyway.
         try:
-            await cast(object, redis.decr(redis_key))
+            await cast(Awaitable[Any], redis.decr(redis_key))
         except Exception:  # noqa: BLE001
             pass
         log.info(

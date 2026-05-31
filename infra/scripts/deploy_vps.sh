@@ -1,8 +1,12 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════╗
 # ║   Astro TMA — One-Shot Deploy                       ║
-# ║   Server: 194.99.21.53                          ║
+# ║   Server: 194.99.21.53                              ║
 # ║   Run as root on fresh Ubuntu 24.04                 ║
+# ║                                                      ║
+# ║   Pre-req: copy a populated .env into                ║
+# ║   /opt/astro-tma/.env before running this script.    ║
+# ║   See infra/scripts/.env.example for the schema.     ║
 # ╚══════════════════════════════════════════════════════╝
 set -euo pipefail
 
@@ -16,35 +20,20 @@ echo "[1/8] Installing packages..."
 apt-get update -qq
 apt-get install -y -qq docker.io docker-compose-v2 certbot git curl python3
 
-# ── 2. Clone / copy project ────────────────────────────
+# ── 2. Project dir + .env check ────────────────────────
 echo "[2/8] Setting up project..."
 mkdir -p /opt/astro-tma
 cd /opt/astro-tma
 
-# Write .env directly (no git needed for first deploy)
-cat > .env << 'ENVEOF'
-APP_ENV=production
-APP_DEBUG=false
-APP_SECRET_KEY=be065378ed8793b8ffcb21b959a3b696310a117dfa041f76353d9ff9ddaa9a36
-TELEGRAM_BOT_TOKEN=8533228486:AAEUvNqp-SgV1zzPI0QzCc5ygDFgkSkkg6s
-TELEGRAM_WEBHOOK_SECRET=681c972ed742c2c4c970f43c5d19314f
-TELEGRAM_WEBHOOK_URL=https://ip-194-99-21-53-142250.vps.hosted-by-mvps.net/api/payments/webhook
-DATABASE_URL=postgresql+asyncpg://astro:abd23d54e72ee964ab80f882@postgres:5432/astro_tma
-POSTGRES_PASSWORD=abd23d54e72ee964ab80f882
-REDIS_URL=redis://redis:6379/0
-GEONAMES_USERNAME=demo
-PRICE_HOROSCOPE_TOMORROW=25
-PRICE_HOROSCOPE_WEEK=50
-PRICE_HOROSCOPE_MONTH=75
-PRICE_TAROT_CELTIC=30
-PRICE_TAROT_WEEK=40
-PRICE_NATAL_FULL=150
-PRICE_SYNASTRY=100
-PRICE_SUBSCRIPTION_MONTH=299
-PRICE_SUBSCRIPTION_YEAR=1990
-FEATURE_PUSH_NOTIFICATIONS=true
-FEATURE_SYNASTRY=true
-ENVEOF
+if [[ ! -f .env ]]; then
+  echo "❌ /opt/astro-tma/.env not found."
+  echo "   Copy infra/scripts/.env.example to /opt/astro-tma/.env,"
+  echo "   fill in real secrets, then re-run this script."
+  exit 1
+fi
+
+# Source .env so we can use values below (TELEGRAM_BOT_TOKEN etc.)
+set -a; source .env; set +a
 
 # ── 3. SSL certificate ─────────────────────────────────
 echo "[3/8] Getting SSL certificate..."
@@ -131,7 +120,7 @@ echo "[5/8] Starting services..."
 docker compose up -d postgres redis
 sleep 10
 
-# ── 6. Copy backend code (placeholder - upload via scp) ─
+# ── 6. Start backend ──────────────────────────────────
 echo "[6/8] Waiting for backend..."
 docker compose up -d backend
 sleep 15
@@ -139,14 +128,14 @@ sleep 15
 # ── 7. Register Telegram webhook ──────────────────────
 echo "[7/8] Registering Telegram webhook..."
 curl -s -X POST \
-  "https://api.telegram.org/bot8533228486:AAEUvNqp-SgV1zzPI0QzCc5ygDFgkSkkg6s/setWebhook" \
+  "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://ip-194-99-21-53-142250.vps.hosted-by-mvps.net/api/payments/webhook","secret_token":"681c972ed742c2c4c970f43c5d19314f","allowed_updates":["message","pre_checkout_query"]}'
+  -d "{\"url\":\"${TELEGRAM_WEBHOOK_URL}\",\"secret_token\":\"${TELEGRAM_WEBHOOK_SECRET}\",\"allowed_updates\":[\"message\",\"pre_checkout_query\"]}"
 echo ""
 
 # ── 8. Verify ─────────────────────────────────────────
 echo "[8/8] Verifying bot..."
-curl -s "https://api.telegram.org/bot8533228486:AAEUvNqp-SgV1zzPI0QzCc5ygDFgkSkkg6s/getMe" | python3 -m json.tool
+curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" | python3 -m json.tool
 
 echo ""
 echo "=================================================="

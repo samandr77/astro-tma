@@ -886,10 +886,10 @@ _SUIT_DATA = {
 def _image_key(arcana: str, number: int, suit: str = "", name_en: str = "") -> str:
     """Return image filename for custom tarot card images."""
     if arcana == "major":
-        return f"{number:02d}_{name_en.replace(' ', '_')}.webp"
+        return f"{number:02d}_{name_en.replace(' ', '_')}.svg"
     suit_offset = {"wands": 22, "cups": 36, "swords": 50, "pentacles": 64}
     idx = suit_offset.get(suit, 22) + (number - 1)
-    return f"{idx:02d}_{name_en.replace(' ', '_')}.webp"
+    return f"{idx:02d}_{name_en.replace(' ', '_')}.svg"
 
 
 def get_all_cards_seed() -> list[dict]:

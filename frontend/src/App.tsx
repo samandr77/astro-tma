@@ -92,6 +92,16 @@ const Purchases = lazy(() =>
     default: m.Purchases,
   })),
 );
+const DestinyMatrixInfo = lazy(() =>
+  import("@/components/screens/DestinyMatrixInfo").then((m) => ({
+    default: m.DestinyMatrixInfo,
+  })),
+);
+const DestinyMatrixReading = lazy(() =>
+  import("@/components/screens/DestinyMatrixReading").then((m) => ({
+    default: m.DestinyMatrixReading,
+  })),
+);
 
 function SplashScreen() {
   return (
@@ -269,6 +279,8 @@ export default function App() {
             {screen === "news_detail" && <NewsDetail />}
             {screen === "referral" && <Referral />}
             {screen === "purchases" && <Purchases />}
+            {screen === "destiny_matrix_info" && <DestinyMatrixInfo />}
+            {screen === "destiny_matrix_reading" && <DestinyMatrixReading />}
           </motion.div>
         </Suspense>
 

@@ -4,10 +4,22 @@ import { FlipCard } from './FlipCard'
 import { TarotCardBack } from './TarotCardBack'
 import { useHaptic } from '@/hooks/useTelegram'
 import type { TarotCardDetail } from '@/types'
-import { CARD_H, CARD_W, SPREAD_CONFIG, type SpreadKey } from '@/data/spread-config'
+import {
+  CARD_H,
+  CARD_W,
+  FAN_CARD_H,
+  FAN_CARD_W,
+  SLOT_H,
+  SLOT_W,
+  SPREAD_CONFIG,
+  type SpreadKey,
+} from '@/data/spread-config'
 import styles from './CelticCrossFlow.module.css'
 
 const INITIAL_FAN_COUNT = 15
+const FLY_TO_SLOT_SCALE = CARD_H / FAN_CARD_H
+const SLOT_OFFSET_X = (SLOT_W - CARD_W) / 2
+const SLOT_OFFSET_Y = (SLOT_H - CARD_H) / 2
 
 type DrawSpreadKey = Exclude<SpreadKey, 'celtic_cross'>
 type Phase = 'idle' | 'shuffle' | 'fan' | 'reading' | 'complete'
@@ -152,8 +164,8 @@ export function DrawSpreadFlow({
       const targetCenterY = targetRect.top + targetRect.height / 2
 
       setFlyCard({
-        left: startCenterX - CARD_W / 2,
-        top: startCenterY - CARD_H / 2,
+        left: startCenterX - FAN_CARD_W / 2,
+        top: startCenterY - FAN_CARD_H / 2,
         dx: targetCenterX - startCenterX,
         dy: targetCenterY - startCenterY,
         startRot,
@@ -235,8 +247,8 @@ export function DrawSpreadFlow({
                     else slotRefs.current.delete(idx)
                   }}
                   style={{
-                    left: slot.x,
-                    top: slot.y,
+                    left: slot.x + SLOT_OFFSET_X,
+                    top: slot.y + SLOT_OFFSET_Y,
                     width: CARD_W,
                     height: CARD_H,
                   }}
@@ -374,12 +386,12 @@ export function DrawSpreadFlow({
             {
               left: flyCard.left,
               top: flyCard.top,
-              width: CARD_W,
-              height: CARD_H,
+              width: FAN_CARD_W,
+              height: FAN_CARD_H,
               '--dx': `${flyCard.dx}px`,
               '--dy': `${flyCard.dy}px`,
               '--start-rot': `${flyCard.startRot}deg`,
-              '--final-scale': `${scale}`,
+              '--final-scale': `${FLY_TO_SLOT_SCALE * scale}`,
             } as CSSProperties
           }
           onAnimationEnd={handleFlyEnd}

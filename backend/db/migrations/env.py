@@ -1,5 +1,6 @@
 """Alembic env.py — async migrations for SQLAlchemy 2.0"""
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -13,6 +14,11 @@ from db.database import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Inject DATABASE_URL from env so alembic.ini stays secret-free.
+_db_url = os.environ.get("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata
 

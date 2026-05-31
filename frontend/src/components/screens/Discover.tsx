@@ -70,6 +70,31 @@ const SECTIONS: { title: string; cards: PracticeCard[] }[] = [
           </svg>
         ),
       },
+      {
+        label: "Матрица Судьбы",
+        desc: "Расшифровка по дате рождения",
+        screen: "destiny_matrix_info",
+        gradient:
+          "linear-gradient(135deg, rgba(232,200,98,0.14) 0%, rgba(232,200,98,0.03) 100%)",
+        iconColor: "#e8c862",
+        icon: (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 28 28"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {/* Octagram = big diamond ⟂ small square (rotated 45°) */}
+            <path d="M14 3l11 11-11 11L3 14z" />
+            <path d="M5.5 5.5l17 17M22.5 5.5l-17 17" />
+            <circle cx="14" cy="14" r="2" />
+          </svg>
+        ),
+      },
     ],
   },
   {

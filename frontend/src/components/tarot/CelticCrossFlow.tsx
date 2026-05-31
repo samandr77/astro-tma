@@ -5,13 +5,24 @@ import { SpreadReading } from './SpreadReading'
 import { TarotCardBack } from './TarotCardBack'
 import { useHaptic } from '@/hooks/useTelegram'
 import type { TarotCardDetail } from '@/types'
-import { CARD_H, CARD_W, SPREAD_CONFIG } from '@/data/spread-config'
+import {
+  CARD_H,
+  CARD_W,
+  FAN_CARD_H,
+  FAN_CARD_W,
+  SLOT_H,
+  SLOT_W,
+  SPREAD_CONFIG,
+} from '@/data/spread-config'
 import styles from './CelticCrossFlow.module.css'
 
 const CONFIG = SPREAD_CONFIG.celtic_cross
 const LAYOUT_W = CONFIG.layout.w
 const LAYOUT_H = CONFIG.layout.h
 const INITIAL_FAN_COUNT = 15
+const FLY_TO_SLOT_SCALE = CARD_H / FAN_CARD_H
+const SLOT_OFFSET_X = (SLOT_W - CARD_W) / 2
+const SLOT_OFFSET_Y = (SLOT_H - CARD_H) / 2
 
 const SLOTS: { slot: number; x: number; y: number; symbol: string; rotate?: number }[] = [
   ...CONFIG.layout.slots.map((slot, idx) => ({
@@ -113,8 +124,8 @@ export function CelticCrossFlow({ readingId, cards }: Props) {
       const targetCenterY = targetRect.top + targetRect.height / 2
 
       setFlyCard({
-        left: startCenterX - CARD_W / 2,
-        top: startCenterY - CARD_H / 2,
+        left: startCenterX - FAN_CARD_W / 2,
+        top: startCenterY - FAN_CARD_H / 2,
         dx: targetCenterX - startCenterX,
         dy: targetCenterY - startCenterY,
         startRot,
@@ -255,8 +266,8 @@ export function CelticCrossFlow({ readingId, cards }: Props) {
                     else slotRefs.current.delete(idx)
                   }}
                   style={{
-                    left: slot.x,
-                    top: slot.y,
+                    left: slot.x + SLOT_OFFSET_X,
+                    top: slot.y + SLOT_OFFSET_Y,
                     width: CARD_W,
                     height: CARD_H,
                   }}
@@ -401,12 +412,12 @@ export function CelticCrossFlow({ readingId, cards }: Props) {
             {
               left: flyCard.left,
               top: flyCard.top,
-              width: CARD_W,
-              height: CARD_H,
+              width: FAN_CARD_W,
+              height: FAN_CARD_H,
               '--dx': `${flyCard.dx}px`,
               '--dy': `${flyCard.dy}px`,
               '--start-rot': `${flyCard.startRot}deg`,
-              '--final-scale': `${scale}`,
+              '--final-scale': `${FLY_TO_SLOT_SCALE * scale}`,
             } as React.CSSProperties
           }
           onAnimationEnd={handleFlyEnd}

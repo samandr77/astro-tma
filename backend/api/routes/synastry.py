@@ -37,6 +37,13 @@ from services.users import repository as user_repo
 log = get_logger(__name__)
 router = APIRouter(prefix="/synastry", tags=["synastry"])
 
+
+async def _has_synastry_access(db, user_id: int) -> bool:
+    """Premium subscription OR a one-off `synastry` purchase unlocks it."""
+    if await user_repo.is_premium(db, user_id):
+        return True
+    return await user_repo.has_purchased(db, user_id, "synastry")
+
 _TOKEN_TTL_DAYS = 7
 _BOT_USERNAME_CACHE: str | None = None
 _BOT_USERNAME_PLACEHOLDERS = {
@@ -261,7 +268,7 @@ async def create_request(
     """Generate (or reuse) an invite token for synastry. Requires prior synastry purchase."""
     user = await _require_user_with_chart(db, tg_user["id"])
 
-    if not await user_repo.has_purchased(db, user.id, "synastry"):
+    if not await _has_synastry_access(db, user.id):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "Покупка Синастрии обязательна")
 
     now = datetime.now(UTC)
@@ -507,7 +514,7 @@ async def manual_synastry(
     if initiator_chart is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Заполните данные рождения в профиле")
 
-    if not await user_repo.has_purchased(db, initiator.id, "synastry"):
+    if not await _has_synastry_access(db, initiator.id):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "Покупка Синастрии обязательна")
 
     from services.ratelimit import LIMITS, enforce_monthly_limit

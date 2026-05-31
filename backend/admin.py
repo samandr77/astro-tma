@@ -3,12 +3,17 @@ SQLAdmin panel — /admin
 Protected by username + password from settings.
 """
 
-from sqladmin import Admin, ModelView
-from sqladmin.authentication import AuthenticationBackend
-from starlette.requests import Request
+from datetime import UTC, datetime, timedelta
 
+from sqladmin import Admin, ModelView, action
+from sqladmin.authentication import AuthenticationBackend
+from sqlalchemy import select
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
+
+from core.logging import get_logger
 from core.settings import settings
-from db.database import engine
+from db.database import AsyncSessionLocal, engine
 from db.models import (
     DailyHoroscope,
     Interpretation,
@@ -17,11 +22,15 @@ from db.models import (
     NatalChart,
     Purchase,
     Subscription,
+    SubscriptionPlan,
+    SubscriptionStatus,
     TarotCard,
     TarotPositionMeaning,
     TarotReading,
     User,
 )
+
+log = get_logger(__name__)
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -55,10 +64,104 @@ class UserAdmin(ModelView, model=User):
     ]
     column_searchable_list = [User.tg_first_name, User.tg_username]
     column_sortable_list = [User.created_at, User.sun_sign]
-    column_details_exclude_list = [User.natal_chart, User.subscriptions, User.purchases, User.tarot_readings]
+    # Show subscriptions + purchases inline on the detail page so an
+    # operator can immediately see whether the user has active Premium
+    # (status=active + expires_at in the future) and which one-off
+    # products they bought.
+    column_details_exclude_list = [User.natal_chart, User.tarot_readings]
     can_delete = True
     can_edit = True
     can_create = False
+
+    @action(
+        name="grant_premium_year",
+        label="Выдать Premium на 1 год",
+        confirmation_message="Выдать Premium на 365 дней выбранным пользователям? "
+                             "Если активная подписка уже есть — продлим её на год.",
+        add_in_detail=True,
+        add_in_list=True,
+    )
+    async def grant_premium_year(self, request: Request) -> RedirectResponse:
+        pks = _parse_pks(request)
+        if not pks:
+            return _redirect_back(request)
+
+        now = datetime.now(UTC)
+        extension = timedelta(days=365)
+
+        async with AsyncSessionLocal() as session:
+            for uid in pks:
+                # If there's an active sub that hasn't expired — extend it.
+                result = await session.execute(
+                    select(Subscription)
+                    .where(
+                        Subscription.user_id == uid,
+                        Subscription.status == SubscriptionStatus.ACTIVE,
+                    )
+                    .order_by(Subscription.expires_at.desc())
+                    .limit(1)
+                )
+                sub = result.scalar_one_or_none()
+                if sub and sub.expires_at > now:
+                    sub.expires_at = sub.expires_at + extension
+                    log.info("admin.premium.extended", user_id=uid,
+                             new_expires=sub.expires_at.isoformat())
+                else:
+                    session.add(Subscription(
+                        user_id=uid,
+                        plan=SubscriptionPlan.PREMIUM_YEAR,
+                        status=SubscriptionStatus.ACTIVE,
+                        stars_paid=0,
+                        tg_payment_charge_id=f"admin-grant-{uid}-{int(now.timestamp())}",
+                        starts_at=now,
+                        expires_at=now + extension,
+                        is_trial=True,
+                        trial_reason="admin_grant",
+                    ))
+                    log.info("admin.premium.granted", user_id=uid, days=365)
+            await session.commit()
+        return _redirect_back(request)
+
+    @action(
+        name="revoke_premium",
+        label="Отозвать Premium",
+        confirmation_message="Отозвать все активные подписки у выбранных пользователей?",
+        add_in_detail=True,
+        add_in_list=True,
+    )
+    async def revoke_premium(self, request: Request) -> RedirectResponse:
+        pks = _parse_pks(request)
+        if not pks:
+            return _redirect_back(request)
+
+        async with AsyncSessionLocal() as session:
+            for uid in pks:
+                result = await session.execute(
+                    select(Subscription).where(
+                        Subscription.user_id == uid,
+                        Subscription.status == SubscriptionStatus.ACTIVE,
+                    )
+                )
+                for sub in result.scalars():
+                    sub.status = SubscriptionStatus.CANCELLED
+                    log.info("admin.premium.revoked",
+                             user_id=uid, subscription_id=sub.id)
+            await session.commit()
+        return _redirect_back(request)
+
+
+def _parse_pks(request: Request) -> list[int]:
+    raw = request.query_params.get("pks", "")
+    return [int(p) for p in raw.split(",") if p.strip().isdigit()]
+
+
+def _redirect_back(request: Request) -> RedirectResponse:
+    """SQLAdmin actions return to the page they were called from."""
+    referer = request.headers.get("referer")
+    if referer:
+        return RedirectResponse(referer, status_code=302)
+    return RedirectResponse(request.url_for("admin:list", identity="user"),
+                            status_code=302)
 
 
 class NatalChartAdmin(ModelView, model=NatalChart):
@@ -141,7 +244,7 @@ class SubscriptionAdmin(ModelView, model=Subscription):
     icon = "fa-solid fa-crown"
     column_list = [Subscription.id, Subscription.user_id, Subscription.plan, Subscription.status, Subscription.expires_at]
     column_sortable_list = [Subscription.created_at, Subscription.expires_at]
-    can_create = False
+    can_create = True
     can_edit = True
     can_delete = True
 

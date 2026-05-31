@@ -13,7 +13,98 @@ import { useHaptic } from "@/hooks/useTelegram";
 import { ZODIAC_SIGNS, type TarotSpreadResponse } from "@/types";
 import { ZodiacIcon } from "@/components/ui/ZodiacIcon";
 
-const DAILY_CARD_STORAGE_KEY = "tarot-daily-state";
+const DAILY_CARD_STORAGE_KEY = "tarot-daily-state-v4";
+const TAROT_IMAGE_BASE =
+  "https://ip-194-99-21-53-142250.vps.hosted-by-mvps.net/static/tarot/";
+const DAILY_TAROT_CARD_ORDER = [
+  "The Fool",
+  "The Magician",
+  "The High Priestess",
+  "The Empress",
+  "The Emperor",
+  "The Hierophant",
+  "The Lovers",
+  "The Chariot",
+  "Strength",
+  "The Hermit",
+  "Wheel of Fortune",
+  "Justice",
+  "The Hanged Man",
+  "Death",
+  "Temperance",
+  "The Devil",
+  "The Tower",
+  "The Star",
+  "The Moon",
+  "The Sun",
+  "Judgement",
+  "The World",
+  "Ace of Wands",
+  "Two of Wands",
+  "Three of Wands",
+  "Four of Wands",
+  "Five of Wands",
+  "Six of Wands",
+  "Seven of Wands",
+  "Eight of Wands",
+  "Nine of Wands",
+  "Ten of Wands",
+  "Page of Wands",
+  "Knight of Wands",
+  "Queen of Wands",
+  "King of Wands",
+  "Ace of Cups",
+  "Two of Cups",
+  "Three of Cups",
+  "Four of Cups",
+  "Five of Cups",
+  "Six of Cups",
+  "Seven of Cups",
+  "Eight of Cups",
+  "Nine of Cups",
+  "Ten of Cups",
+  "Page of Cups",
+  "Knight of Cups",
+  "Queen of Cups",
+  "King of Cups",
+  "Ace of Swords",
+  "Two of Swords",
+  "Three of Swords",
+  "Four of Swords",
+  "Five of Swords",
+  "Six of Swords",
+  "Seven of Swords",
+  "Eight of Swords",
+  "Nine of Swords",
+  "Ten of Swords",
+  "Page of Swords",
+  "Knight of Swords",
+  "Queen of Swords",
+  "King of Swords",
+  "Ace of Pentacles",
+  "Two of Pentacles",
+  "Three of Pentacles",
+  "Four of Pentacles",
+  "Five of Pentacles",
+  "Six of Pentacles",
+  "Seven of Pentacles",
+  "Eight of Pentacles",
+  "Nine of Pentacles",
+  "Ten of Pentacles",
+  "Page of Pentacles",
+  "Knight of Pentacles",
+  "Queen of Pentacles",
+  "King of Pentacles",
+] as const;
+
+function getDailyTarotFaceUrl(nameEn?: string | null): string | null {
+  if (!nameEn) return null;
+  const index = DAILY_TAROT_CARD_ORDER.indexOf(
+    nameEn as (typeof DAILY_TAROT_CARD_ORDER)[number],
+  );
+  if (index < 0) return null;
+  return `${TAROT_IMAGE_BASE}${String(index).padStart(2, "0")}_${nameEn.replace(/ /g, "_")}.svg`;
+}
 
 function getTodayKey(): string {
   return new Date().toLocaleDateString("en-CA");
@@ -160,6 +251,12 @@ export function Home() {
     month: "long",
   });
   const openedDailyCard = dailyCard?.cards?.[0];
+  const openedDailyCardFaceUrl =
+    getDailyTarotFaceUrl(openedDailyCard?.name_en) ??
+    openedDailyCard?.image_url ??
+    null;
+  const wrapDailyCardText =
+    cardRevealed && Boolean(openedDailyCard) && !cardLoading && !cardFetching;
 
   return (
     <div className="screen home-screen">
@@ -374,7 +471,7 @@ export function Home() {
               className="home-tile"
               onClick={() => {
                 impact("light");
-                setScreen("synastry_invite");
+                setScreen("synastry");
               }}
             >
               <span className="home-tile__emoji" aria-hidden="true">
@@ -414,7 +511,11 @@ export function Home() {
             transition={{ delay: 0.14 }}
           >
             <div className="card-tag">✦ Карта таро на сегодня</div>
-            <div className="tarot-day-card__split">
+            <div
+              className={`tarot-day-card__split ${
+                wrapDailyCardText ? "tarot-day-card__split--wrap-text" : ""
+              }`}
+            >
               <div className="tarot-day-card__visual">
                 <div className="tarot-flip">
                   <motion.div
@@ -444,11 +545,15 @@ export function Home() {
                           </div>
                         ) : openedDailyCard ? (
                           <div className="tarot-flip__img-wrap">
-                            {openedDailyCard.image_url ? (
+                            {openedDailyCardFaceUrl ? (
                               <img
-                                src={openedDailyCard.image_url}
+                                src={openedDailyCardFaceUrl}
                                 alt={openedDailyCard.name_ru}
-                                className="tarot-flip__img"
+                                className={`tarot-flip__img ${
+                                  openedDailyCard.reversed
+                                    ? "tarot-flip__img--reversed"
+                                    : ""
+                                }`}
                                 loading="lazy"
                               />
                             ) : (

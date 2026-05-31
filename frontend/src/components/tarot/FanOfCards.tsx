@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
+import { FAN_CARD_H, FAN_CARD_W } from '@/data/spread-config'
 import styles from './FanOfCards.module.css'
-
-const CARD_W = 88
-const CARD_H = 150
 
 export interface FanCard {
   id: number
@@ -47,6 +45,7 @@ export function FanOfCards({ cards, onPick, renderCard }: Props) {
               {
                 '--angle': `${angleDeg}deg`,
                 '--appear-delay': `${delay}s`,
+                '--fan-card-half': `${FAN_CARD_W / 2}px`,
                 zIndex: i + 1,
               } as React.CSSProperties
             }
@@ -57,7 +56,7 @@ export function FanOfCards({ cards, onPick, renderCard }: Props) {
           >
             <div
               className={styles.fanCardInner}
-              style={{ width: CARD_W, height: CARD_H }}
+              style={{ width: FAN_CARD_W, height: FAN_CARD_H }}
             >
               {renderCard()}
             </div>

@@ -3,7 +3,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useHaptic } from "@/hooks/useTelegram";
 import { MeaningText } from "@/components/ui/MeaningText";
 import type { TarotCardDetail } from "@/types";
-import { CARD_H, CARD_W, SPREAD_CONFIG, type SpreadKey } from "@/data/spread-config";
+import {
+  CARD_H,
+  CARD_W,
+  SLOT_H,
+  SLOT_W,
+  SPREAD_CONFIG,
+  type SpreadKey,
+} from "@/data/spread-config";
+
+const SLOT_OFFSET_X = (SLOT_W - CARD_W) / 2;
+const SLOT_OFFSET_Y = (SLOT_H - CARD_H) / 2;
 
 interface Props {
   spreadType: string;
@@ -140,8 +150,8 @@ export function SpreadLayout({
                       isCross ? " spread-slot--cross" : ""
                     }`}
                     style={{
-                      left: slot.x,
-                      top: slot.y,
+                      left: slot.x + SLOT_OFFSET_X,
+                      top: slot.y + SLOT_OFFSET_Y,
                       width: CARD_W,
                       height: CARD_H,
                     }}
@@ -174,8 +184,8 @@ export function SpreadLayout({
                     isCross ? " spread-slot--cross" : ""
                   }${isSelected ? " spread-slot--selected" : ""}`}
                   style={{
-                    left: slot.x,
-                    top: slot.y,
+                    left: slot.x + SLOT_OFFSET_X,
+                    top: slot.y + SLOT_OFFSET_Y,
                     width: CARD_W,
                     height: CARD_H,
                   }}

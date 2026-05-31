@@ -74,7 +74,7 @@ export function SpreadReading({ spreadType, readingId, cards }: Props) {
   if (isPending) {
     return (
       <div className={styles.readingWrap}>
-        <div className={styles.loader}>Астролог читает ваш расклад…</div>
+        <div className={styles.loader}>Таролог читает ваш расклад…</div>
       </div>
     )
   }

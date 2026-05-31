@@ -1,5 +1,6 @@
 """Natal chart endpoints — full chart retrieval and SVG generation."""
 
+from io import BytesIO
 from secrets import token_urlsafe
 from typing import Any
 from urllib.parse import quote
@@ -31,7 +32,9 @@ log = get_logger(__name__)
 
 router = APIRouter(prefix="/natal", tags=["natal"])
 _PDF_DOWNLOAD_TTL_SECONDS = 300
-NATAL_DESCRIPTIONS_VERSION = 2
+NATAL_DESCRIPTIONS_VERSION = 3
+MIN_EXPANDED_READING_HEADINGS = 5
+MIN_EXPANDED_READING_WORDS = 650
 
 
 def _empty_descriptions() -> dict[str, Any]:
@@ -44,6 +47,14 @@ def _has_any(descriptions: dict[str, Any]) -> bool:
         or descriptions.get("houses")
         or descriptions.get("aspects")
     )
+
+
+def _is_expanded_reading(reading: Any) -> bool:
+    if not isinstance(reading, str) or not reading.strip():
+        return False
+    headings = sum(1 for line in reading.splitlines() if line.strip().startswith("**") and line.strip().endswith("**"))
+    words = len(reading.split())
+    return headings >= MIN_EXPANDED_READING_HEADINGS and words >= MIN_EXPANDED_READING_WORDS
 
 
 async def _get_or_generate_descriptions(
@@ -161,8 +172,33 @@ async def _get_or_generate_pdf_reading(
     return reading
 
 
-async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
+async def _get_cached_pdf_reading(user) -> str | None:
+    cached = await cache_get(key_natal(user.id))
+    if isinstance(cached, dict):
+        reading = cached.get("reading")
+        if isinstance(reading, str) and reading.strip():
+            return reading
+    return None
+
+
+def _get_stored_descriptions(user) -> dict[str, Any]:
+    if not user.natal_chart:
+        return _empty_descriptions()
+
+    chart_data = user.natal_chart.chart_data or {}
+    stored = chart_data.get("descriptions")
+    if (
+        isinstance(stored, dict)
+        and stored.get("_version") == NATAL_DESCRIPTIONS_VERSION
+        and _has_any(stored)
+    ):
+        return stored
+    return _empty_descriptions()
+
+
+async def _build_natal_pdf_bytes(db: AsyncSession, user) -> bytes:
     from services.natal_pdf import generate_natal_pdf
+    from services.natal_pdf_html import generate_natal_pdf_html
 
     chart = user.natal_chart
     planets = chart.chart_data.get("planets", {})
@@ -173,75 +209,100 @@ async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
         for a in aspects_raw
     ]
 
-    descriptions = await _get_or_generate_descriptions(db, user)
-    reading = await _get_or_generate_pdf_reading(user, chart, planets, aspects)
+    # PDF downloads must stay comfortably under reverse-proxy timeouts.
+    # Use already persisted/cached LLM text when it exists; otherwise the PDF
+    # generator has local fallback copy and can respond immediately.
+    descriptions = _get_stored_descriptions(user)
+    reading = await _get_cached_pdf_reading(user)
 
-    pdf_bytes = generate_natal_pdf(
-        user_name=user.tg_first_name or "User",
-        birth_date=str(user.birth_date) if user.birth_date else "",
-        birth_time=(
+    pdf_kwargs = {
+        "user_name": user.tg_first_name or "User",
+        "birth_date": str(user.birth_date) if user.birth_date else "",
+        "birth_time": (
             user.birth_date.strftime("%H:%M")
             if user.birth_date and user.birth_time_known
             else None
         ),
-        birth_city=user.birth_city or "",
-        sun_sign=chart.sun_sign or "",
-        moon_sign=chart.moon_sign or "",
-        asc_sign=chart.ascendant_sign,
-        planets=planets,
-        houses=houses,
-        aspects=aspects,
-        reading=reading,
-        descriptions=descriptions,
-    )
+        "birth_city": user.birth_city or "",
+        "sun_sign": chart.sun_sign or "",
+        "moon_sign": chart.moon_sign or "",
+        "asc_sign": chart.ascendant_sign,
+        "planets": planets,
+        "houses": houses,
+        "aspects": aspects,
+        "reading": reading,
+        "descriptions": descriptions,
+    }
+    try:
+        pdf_bytes = await generate_natal_pdf_html(**pdf_kwargs)
+    except Exception as e:  # noqa: BLE001
+        log.error("natal.pdf_html_failed_fallback_reportlab", user_id=user.id, error=str(e))
+        pdf_bytes = generate_natal_pdf(**pdf_kwargs)
 
+    return pdf_bytes
+
+
+async def _build_natal_pdf_response(db: AsyncSession, user) -> Response:
+    pdf_bytes = await _build_natal_pdf_bytes(db, user)
     filename = _natal_pdf_filename(user)
     return Response(
         content=pdf_bytes,
-        media_type="application/pdf",
+        media_type="application/octet-stream",
         headers={
             "Cache-Control": "no-store",
             "Content-Disposition": (
                 f"attachment; filename=\"natal-chart.pdf\"; "
                 f"filename*=UTF-8''{quote(filename)}"
             ),
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
 
-async def _send_natal_pdf_to_chat(db: AsyncSession, user) -> int | None:
-    response = await _build_natal_pdf_response(db, user)
+async def _send_natal_pdf_document(user, pdf_bytes: bytes) -> None:
     filename = _natal_pdf_filename(user)
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendDocument"
     data = {
-        "chat_id": user.id,
-        "caption": "Ваш полный PDF-отчёт по натальной карте",
+        "chat_id": str(user.id),
+        "caption": "Ваш полный PDF-отчёт по натальной карте.",
     }
     files = {
-        "document": (filename, response.body, "application/pdf"),
+        "document": (
+            filename,
+            BytesIO(pdf_bytes),
+            "application/pdf",
+        )
     }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            tg_response = await client.post(url, data=data, files=files)
-        payload = tg_response.json()
-    except Exception as e:
+            response = await client.post(url, data=data, files=files)
+        payload = response.json()
+    except Exception as e:  # noqa: BLE001
         log.error("natal.pdf_send_failed", user_id=user.id, error=str(e))
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
-            "Не удалось отправить PDF в Telegram",
+            "Не удалось отправить PDF в Telegram. Попробуйте ещё раз.",
         ) from e
 
-    if not payload.get("ok"):
-        description = str(payload.get("description") or "Telegram API error")
-        log.error("natal.pdf_send_rejected", user_id=user.id, error=description)
+    if response.status_code == 403:
         raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            "Не удалось отправить PDF в Telegram",
+            status.HTTP_403_FORBIDDEN,
+            "Сначала откройте чат с ботом и нажмите /start, затем попробуйте снова.",
         )
 
-    message_id = payload.get("result", {}).get("message_id")
-    return int(message_id) if isinstance(message_id, int) else None
+    if not response.is_success or not payload.get("ok"):
+        description = str(payload.get("description") or response.text)
+        log.error(
+            "natal.pdf_send_rejected",
+            user_id=user.id,
+            status_code=response.status_code,
+            error=description[:500],
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Telegram не принял PDF. Попробуйте ещё раз.",
+        )
 
 
 @router.get("/summary")
@@ -361,15 +422,34 @@ async def get_natal_full(
     if not user.natal_chart:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No birth data — set birth data first")
 
-    # Check cache
-    cache_key = key_natal(user.id)
-    cached = await cache_get(cache_key)
-    if cached:
-        return cached
-
     chart = user.natal_chart
     planets = chart.chart_data.get("planets", {})
     aspects = chart.chart_data.get("aspects", [])
+
+    # Check cache. Older cached readings were intentionally short; refresh
+    # them on the full-chart view so PDF downloads can stay non-blocking.
+    cache_key = key_natal(user.id)
+    cached = await cache_get(cache_key)
+    if isinstance(cached, dict):
+        if _is_expanded_reading(cached.get("reading")) or not settings.ANTHROPIC_API_KEY:
+            return cached
+        try:
+            refreshed_reading = await generate_natal_reading(
+                sun_sign=chart.sun_sign,
+                moon_sign=chart.moon_sign,
+                ascendant_sign=chart.ascendant_sign,
+                planets=planets,
+                aspects=aspects[:10],
+                api_key=settings.ANTHROPIC_API_KEY,
+            )
+        except Exception as e:
+            log.error("natal.llm_refresh_failed", user_id=user.id, error=str(e))
+            return cached
+        refreshed = {**cached, "reading": refreshed_reading}
+        await cache_set(cache_key, refreshed, settings.CACHE_TTL_NATAL)
+        return refreshed
+    if cached:
+        return cached
 
     # Build the three lookup dictionaries the interpreter needs:
     # planet → sign, planet → house, and the raw aspects list.
@@ -478,14 +558,15 @@ async def create_natal_pdf_link(
 
 
 @router.post("/pdf-send")
-async def send_natal_pdf_to_chat(
+async def send_natal_pdf_to_telegram(
     tg_user: dict = Depends(get_tg_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Generate natal PDF and send it to the user's Telegram chat as a document."""
+    """Generate a natal PDF and send it to the user's Telegram chat as a document."""
     user = await _get_pdf_user_or_error(db, tg_user["id"])
-    message_id = await _send_natal_pdf_to_chat(db, user)
-    return {"sent": True, "message_id": message_id}
+    pdf_bytes = await _build_natal_pdf_bytes(db, user)
+    await _send_natal_pdf_document(user, pdf_bytes)
+    return {"status": "sent", "filename": _natal_pdf_filename(user)}
 
 
 @router.get("/pdf-download/{token}")

@@ -13,6 +13,7 @@ caller gets either real text or a generic fallback.
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from sqlalchemy import select, tuple_
@@ -42,11 +43,10 @@ _ASPECT_FALLBACK: dict[str, str] = {
 
 # Characters / tokens we strip from user-controlled names before feeding them
 # to an LLM prompt. Defense against prompt injection (SECURITY_AUDIT.md H5).
-import re as _re
-_PROMPT_INJECTION_BLOCKERS = _re.compile(
+_PROMPT_INJECTION_BLOCKERS = re.compile(
     r"[-<>{}\[\]\\`]"  # control chars, fence brackets, backticks
     r"|ignore (previous|all|the)|игнорируй|system\s*:|assistant\s*:|user\s*:",
-    flags=_re.IGNORECASE,
+    flags=re.IGNORECASE,
 )
 
 

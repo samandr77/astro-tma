@@ -36,7 +36,7 @@ def get_image_key(name_en: str) -> str:
     # Major arcana
     if name_en in MAJOR_ORDER:
         idx = MAJOR_ORDER.index(name_en)
-        return f"{idx:02d}_{name_en.replace(' ', '_')}.webp"
+        return f"{idx:02d}_{name_en.replace(' ', '_')}.svg"
 
     # Minor arcana: "Ace of Wands" -> index 22, etc.
     for suit_idx, suit in enumerate(SUIT_ORDER):
@@ -45,7 +45,7 @@ def get_image_key(name_en: str) -> str:
             if rank in RANK_ORDER:
                 rank_idx = RANK_ORDER.index(rank)
                 idx = 22 + suit_idx * 14 + rank_idx
-                return f"{idx:02d}_{name_en.replace(' ', '_')}.webp"
+                return f"{idx:02d}_{name_en.replace(' ', '_')}.svg"
 
     return None
 

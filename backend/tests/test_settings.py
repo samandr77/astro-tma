@@ -14,6 +14,8 @@ def test_settings_ignores_compose_only_env_vars(tmp_path, monkeypatch):
                 "TELEGRAM_WEBHOOK_SECRET=random-secret-for-webhook-verification",
                 "TELEGRAM_WEBHOOK_URL=https://api.example.test/webhook",
                 "DATABASE_URL=postgresql+asyncpg://astro:yourpassword@postgres:5432/astro_tma",
+                "ADMIN_USERNAME=admin",
+                "ADMIN_PASSWORD=random-admin-password-32-chars",
                 "POSTGRES_PASSWORD=yourpassword",
             ]
         )

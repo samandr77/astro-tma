@@ -24,8 +24,8 @@ type NatalPdfLinkResponse = {
 };
 
 type NatalPdfSendResponse = {
-  sent: boolean;
-  message_id: number | null;
+  status: "sent";
+  filename: string;
 };
 
 type UserProfile = import("@/types").UserProfile;
@@ -102,8 +102,8 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function canUseTelegramChatDelivery(): boolean {
-  return Boolean(WebApp.initData);
+function canUseTelegramOpenLink(): boolean {
+  return Boolean(WebApp.initData) && typeof WebApp.openLink === "function";
 }
 
 function shouldUseLocalDevFixtures(): boolean {
@@ -427,8 +427,8 @@ async function requestLocalDevFixture<T>(
 
   if (path === "/natal/pdf-send" && method === "POST") {
     return {
-      sent: true,
-      message_id: 42,
+      status: "sent",
+      filename: "natal-chart-dev.pdf",
     } as T;
   }
 
@@ -567,8 +567,18 @@ export const natalApi = {
   downloadPdf: async () => {
     const filename = "natal-chart.pdf";
 
-    if (canUseTelegramChatDelivery()) {
-      await request<NatalPdfSendResponse>("POST", "/natal/pdf-send");
+    if (canUseTelegramOpenLink()) {
+      try {
+        await request<NatalPdfSendResponse>("POST", "/natal/pdf-send");
+        WebApp.showAlert?.("PDF-отчёт отправлен вам в чат с ботом.");
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 404) {
+          throw error;
+        }
+
+        const blob = await requestBlob("/natal/pdf");
+        triggerBlobDownload(blob, filename);
+      }
       return;
     }
 
@@ -603,21 +613,105 @@ export const natalApi = {
 };
 
 // ── Tarot ──────────────────────────────────────────────────────────────────────
-// Rewrite backend's webp image URL to local /tarot/<folder>/card-NN-<slug>.svg
-function localTarotImage(remoteUrl: string | null | undefined): string | null {
-  if (!remoteUrl) return null;
-  const filename = remoteUrl.split("/").pop() ?? "";
-  // Pattern: NN_Some_Card_Name.webp  →  NN, Some_Card_Name
-  const m = filename.match(/^(\d{2})_(.+)\.(webp|png|jpe?g|svg)$/i);
-  if (!m) return remoteUrl; // fallback to original
-  const [, num, namePart] = m;
-  const folder = parseInt(num, 10) < 22 ? "majors" : "minors";
-  const slug = namePart.toLowerCase().replace(/^the_/, "").replace(/_/g, "-");
-  return `/tarot/${folder}/card-${num}-${slug}.svg`;
+// Prefer backend's full card art. Local SVGs are fallback-only.
+const TAROT_IMAGE_BASE =
+  "https://ip-194-99-21-53-142250.vps.hosted-by-mvps.net/static/tarot/";
+
+const TAROT_CARD_ORDER = [
+  "The Fool",
+  "The Magician",
+  "The High Priestess",
+  "The Empress",
+  "The Emperor",
+  "The Hierophant",
+  "The Lovers",
+  "The Chariot",
+  "Strength",
+  "The Hermit",
+  "Wheel of Fortune",
+  "Justice",
+  "The Hanged Man",
+  "Death",
+  "Temperance",
+  "The Devil",
+  "The Tower",
+  "The Star",
+  "The Moon",
+  "The Sun",
+  "Judgement",
+  "The World",
+  "Ace of Wands",
+  "Two of Wands",
+  "Three of Wands",
+  "Four of Wands",
+  "Five of Wands",
+  "Six of Wands",
+  "Seven of Wands",
+  "Eight of Wands",
+  "Nine of Wands",
+  "Ten of Wands",
+  "Page of Wands",
+  "Knight of Wands",
+  "Queen of Wands",
+  "King of Wands",
+  "Ace of Cups",
+  "Two of Cups",
+  "Three of Cups",
+  "Four of Cups",
+  "Five of Cups",
+  "Six of Cups",
+  "Seven of Cups",
+  "Eight of Cups",
+  "Nine of Cups",
+  "Ten of Cups",
+  "Page of Cups",
+  "Knight of Cups",
+  "Queen of Cups",
+  "King of Cups",
+  "Ace of Swords",
+  "Two of Swords",
+  "Three of Swords",
+  "Four of Swords",
+  "Five of Swords",
+  "Six of Swords",
+  "Seven of Swords",
+  "Eight of Swords",
+  "Nine of Swords",
+  "Ten of Swords",
+  "Page of Swords",
+  "Knight of Swords",
+  "Queen of Swords",
+  "King of Swords",
+  "Ace of Pentacles",
+  "Two of Pentacles",
+  "Three of Pentacles",
+  "Four of Pentacles",
+  "Five of Pentacles",
+  "Six of Pentacles",
+  "Seven of Pentacles",
+  "Eight of Pentacles",
+  "Nine of Pentacles",
+  "Ten of Pentacles",
+  "Page of Pentacles",
+  "Knight of Pentacles",
+  "Queen of Pentacles",
+  "King of Pentacles",
+] as const;
+
+function remoteTarotImageByName(nameEn: string | null | undefined): string | null {
+  if (!nameEn) return null;
+  const idx = TAROT_CARD_ORDER.indexOf(nameEn as (typeof TAROT_CARD_ORDER)[number]);
+  if (idx < 0) return null;
+  return `${TAROT_IMAGE_BASE}${String(idx).padStart(2, "0")}_${nameEn.replace(/ /g, "_")}.svg`;
 }
 
-function rewriteCardImage<T extends { image_url?: string | null }>(card: T): T {
-  return { ...card, image_url: localTarotImage(card.image_url ?? undefined) };
+function rewriteCardImage<
+  T extends { image_url?: string | null; name_en?: string | null },
+>(card: T): T {
+  // Prefer backend-supplied URL; fall back to name-based reconstruction only
+  // if backend didn't set one (e.g. legacy reading rows).
+  const imageUrl = card.image_url ?? remoteTarotImageByName(card.name_en);
+  return { ...card, image_url: imageUrl };
 }
 
 function rewriteSpread<T extends { cards: { image_url?: string | null }[] }>(
@@ -770,6 +864,218 @@ export const paymentsApi = {
       "/payments/invoice",
       { product_id },
     ),
+};
+
+// ── Destiny Matrix ──────────────────────────────────────────────────────────
+// Структура соответствует MATRIX_DESTINY_SPEC.md §4.2 + §5.1.
+
+export interface DestinyPersonality {
+  day: number;
+  month: number;
+  year: number;
+  bottom: number;
+  center: number;
+}
+
+export interface DestinyAncestralSquare {
+  top_left: number;
+  top_right: number;
+  bottom_right: number;
+  bottom_left: number;
+}
+
+export interface DestinyLines {
+  sky: number;
+  earth: number;
+  father: number;
+  mother: number;
+}
+
+export interface DestinyPurposes {
+  personal: number;
+  social: number;
+  spiritual: number;
+  planetary: number;
+}
+
+export interface DestinyChannels {
+  karmic_tail: number[];
+  talents: number[];
+  relationships: number[];
+  finance: number[];
+  material_karma: number[];
+  parental: number[];
+  ancestral_father_talents: number[];
+  ancestral_father_karma: number[];
+  ancestral_mother_talents: number[];
+  ancestral_mother_karma: number[];
+}
+
+export interface DestinyVarna {
+  varnas: Record<string, number>; // {"Брахман": 40, "Кшатрий": 40, ...}
+  expression: number;
+}
+
+export interface DestinyCenters {
+  personal: number;
+  lineage: number;
+  holistic: number;
+}
+
+export interface DestinyPurposesFull {
+  sky_personal: number;
+  earth_personal: number;
+  holistic_personal: number;
+  father_line: number;
+  mother_line: number;
+  holistic_lineage: number;
+  personal_divine: number;
+  divine_mission: number;
+}
+
+export interface DestinyChakraSet {
+  sahasrara: number;
+  adjna: number;
+  vishuddha: number;
+  anahata: number;
+  manipura: number;
+  svadhisthana: number;
+  muladhara: number;
+}
+
+export interface DestinyChakras {
+  sky: DestinyChakraSet;
+  earth: DestinyChakraSet;
+}
+
+export interface DestinyHealthRow {
+  chakra: string;
+  energy: number;
+  physics: number;
+  key: number;
+}
+
+export interface DestinyHealthMap {
+  rows: DestinyHealthRow[];
+  system: { energy: number; physics: number; key: number };
+}
+
+export interface DestinyEntries {
+  money: number;
+  partner: number;
+}
+
+export interface DestinySpecials {
+  talent: number;
+  character: number;
+  money: number;
+  love: number;
+  cross: number;
+  comfort: number[]; // [comfort_a, comfort_b] = [reduce(2B+2C), reduce(2B+C)]
+  love_diag_1?: number; // reduce(cross + love) — зеркало money_diag_1
+}
+
+export interface DestinyFamilyLines {
+  male_upper: number[];   // [near_center, near_corner] к TL
+  male_lower: number[];   // [near_center, near_corner] к BR
+  female_upper: number[]; // [near_center, near_corner] к TR
+  female_lower: number[]; // [near_center, near_corner] к BL
+}
+
+export interface DestinyMatrixPositions {
+  personality: DestinyPersonality;
+  ancestral_square: DestinyAncestralSquare;
+  lines: DestinyLines;
+  purposes: DestinyPurposes;
+  channels: DestinyChannels;
+  varna: DestinyVarna;
+  /** Новые поля по спеке Ладини — опциональные на время миграции */
+  centers?: DestinyCenters;
+  purposes_full?: DestinyPurposesFull;
+  chakras?: DestinyChakras;
+  health_map?: DestinyHealthMap;
+  entries?: DestinyEntries;
+  specials?: DestinySpecials;
+  money_diagonal?: number[];
+  family_lines?: DestinyFamilyLines;
+}
+
+export interface DestinyMatrixResponse {
+  positions: DestinyMatrixPositions;
+  birth_date: string;
+  computed_at: string;
+  has_full_access: boolean;
+}
+
+export interface ArcanaResponse {
+  arcana_num: number;
+  arcana_name: string;
+  keywords: string[];
+  contexts: Record<string, string>;
+}
+
+export interface DestinyMatrixInterpretation {
+  reading_id: number;
+  sections: Record<string, string>;
+  model: string;
+  generated_at: string;
+  /** V2: false означает что показаны только секции из `FREE_SECTIONS`,
+   *  остальные ключи есть в `sections` с teaser-текстом и помечены в `locked_sections`. */
+  has_full_access?: boolean;
+  locked_sections?: string[];
+}
+
+export const destinyApi = {
+  calculate: () =>
+    request<DestinyMatrixResponse>("POST", "/destiny-matrix/calculate"),
+  getMe: () =>
+    request<DestinyMatrixResponse>("GET", "/destiny-matrix/me"),
+  getArcana: (num: number) =>
+    request<ArcanaResponse>("GET", `/destiny-matrix/arcana/${num}`),
+  getInterpretation: () =>
+    request<DestinyMatrixInterpretation>("GET", "/destiny-matrix/interpretation"),
+  downloadPdf: async () => {
+    const filename = "destiny-matrix.pdf";
+
+    if (canUseTelegramOpenLink()) {
+      try {
+        await request<NatalPdfSendResponse>("POST", "/destiny-matrix/pdf-send");
+        WebApp.showAlert?.("PDF-отчёт отправлен вам в чат с ботом.");
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 404) {
+          throw error;
+        }
+        const blob = await requestBlob("/destiny-matrix/pdf");
+        triggerBlobDownload(blob, filename);
+      }
+      return;
+    }
+
+    try {
+      const blob = await requestBlob("/destiny-matrix/pdf");
+      triggerBlobDownload(blob, filename);
+      return;
+    } catch (directDownloadError) {
+      const popup = openDownloadWindow();
+      try {
+        const link = await request<NatalPdfLinkResponse>(
+          "POST",
+          "/destiny-matrix/pdf-link",
+        );
+        const downloadUrl = apiUrl(link.download_url);
+        if (popup && !popup.closed) {
+          popup.location.href = downloadUrl;
+          return;
+        }
+        triggerDownload(downloadUrl, link.filename || filename);
+      } catch {
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        throw directDownloadError;
+      }
+    }
+  },
 };
 
 export { ApiError };

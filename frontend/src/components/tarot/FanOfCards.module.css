@@ -12,7 +12,7 @@
 .fanCardWrapper {
   position: absolute;
   bottom: 0;
-  left: -44px;
+  left: calc(var(--fan-card-half, 38.5px) * -1);
   transform-origin: bottom center;
   transform: rotate(var(--angle, 0deg));
   transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -26,21 +26,20 @@
 }
 
 .fanCardInner {
-  border-radius: 6px;
+  border-radius: 7px;
   overflow: hidden;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.62));
   transition:
     transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.22s ease;
+    filter 0.22s ease;
 }
 
 .fanCardWrapper:hover .fanCardInner {
   transform: translateY(-34px);
-  box-shadow:
-    0 0 0 1px rgba(201, 168, 76, 0.45),
-    0 0 22px 6px rgba(201, 168, 76, 0.22),
-    0 12px 32px rgba(0, 0, 0, 0.75);
+  filter:
+    drop-shadow(0 0 10px rgba(201, 168, 76, 0.36))
+    drop-shadow(0 12px 28px rgba(0, 0, 0, 0.78));
 }
 
 @keyframes fanCardAppear {

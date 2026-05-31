@@ -101,9 +101,9 @@
 .placeholder {
   position: absolute;
   inset: 0;
-  border: 1px dashed rgba(201, 168, 76, 0.28);
-  border-radius: 8px;
-  background: rgba(201, 168, 76, 0.04);
+  border: 1px solid rgba(201, 168, 76, 0.16);
+  border-radius: 7px;
+  background: rgba(201, 168, 76, 0.025);
   animation: slotBreath 2.6s ease-in-out infinite;
   display: flex;
   align-items: center;
@@ -115,8 +115,8 @@
  * Cards themselves stay at the original cross coordinates. */
 .placeholderCross .placeholderSymbol {
   position: absolute;
-  left: 60px;
-  top: 8px;
+  left: 50%;
+  top: 50%;
   transform: translate(-50%, -50%) rotate(-90deg);
 }
 .placeholderSymbol {
@@ -130,12 +130,12 @@
 }
 @keyframes slotBreath {
   0%, 100% {
-    box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.15);
-    opacity: 0.7;
+    box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.08);
+    opacity: 0.55;
   }
   50% {
-    box-shadow: 0 0 14px 2px rgba(201, 168, 76, 0.35);
-    opacity: 1;
+    box-shadow: 0 0 12px rgba(201, 168, 76, 0.18);
+    opacity: 0.82;
   }
 }
 
@@ -210,7 +210,7 @@
 }
 .deck {
   position: relative;
-  width: 88px;
+  width: 77px;
   height: 150px;
   cursor: pointer;
   pointer-events: all;
@@ -218,9 +218,9 @@
 }
 .deckLayer {
   position: absolute;
-  width: 88px;
+  width: 77px;
   height: 150px;
-  border-radius: 6px;
+  border-radius: 7px;
   overflow: hidden;
 }
 .deckShuffling {
@@ -251,7 +251,7 @@
 
 .remainingDeck {
   position: relative;
-  width: 78px;
+  width: 68px;
   height: 56px;
   margin: -2px auto 4px;
   opacity: 0.72;
@@ -265,9 +265,9 @@
 }
 .remainingCard {
   position: absolute;
-  left: 24px;
+  left: 21px;
   top: 0;
-  width: 34px;
+  width: 26px;
   height: 50px;
   border-radius: 5px;
   border: 0;

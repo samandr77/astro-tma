@@ -35,8 +35,15 @@ export interface SpreadConfig {
   previewSymbols?: string[];
 }
 
-export const CARD_W = 68;
-export const CARD_H = 102;
+export const TAROT_CARD_ASPECT = 794 / 1551;
+
+export const SLOT_W = 68;
+export const SLOT_H = 102;
+export const CARD_H = SLOT_H;
+export const CARD_W = Math.round(CARD_H * TAROT_CARD_ASPECT);
+
+export const FAN_CARD_H = 150;
+export const FAN_CARD_W = Math.round(FAN_CARD_H * TAROT_CARD_ASPECT);
 
 export const SPREAD_CONFIG: Record<SpreadKey, SpreadConfig> = {
   three_card: {

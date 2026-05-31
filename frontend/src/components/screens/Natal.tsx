@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
+import WebApp from "@twa-dev/sdk";
 import { motion, type PanInfo } from "framer-motion";
 import { NatalBasicSkeleton } from "@/components/ui/Skeleton";
 import { useAppStore } from "@/stores/app";
@@ -621,7 +622,7 @@ function getPdfDownloadError(error: unknown): string {
     return error.message || "Не удалось подготовить PDF.";
   }
 
-  return "Не удалось получить PDF. Попробуйте ещё раз.";
+  return "Не удалось подготовить PDF. Попробуйте ещё раз.";
 }
 
 const ELEMENT_COLORS: Record<string, string> = {
@@ -1678,6 +1679,7 @@ function NatalPdfCard({
     error: payError,
   } = usePayment();
   const paying = phase === "opening" || phase === "activating";
+  const sendToTelegramChat = Boolean(WebApp.initData);
 
   const handleClick = async () => {
     if (!hasChart) return;
@@ -1700,7 +1702,9 @@ function NatalPdfCard({
   } else if (isDownloading) {
     label = "Готовим PDF…";
   } else if (entitled) {
-    label = "Получить полный отчёт (PDF)";
+    label = sendToTelegramChat
+      ? "Получить полный отчёт в Telegram"
+      : "Скачать полный отчёт (PDF)";
   } else {
     label = `Открыть отчёт — ${price} ⭐`;
   }

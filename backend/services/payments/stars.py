@@ -58,6 +58,16 @@ PRODUCTS: dict[str, dict] = {
         "stars": settings.PRICE_SYNASTRY,
         "type": "one_time",
     },
+    "destiny_matrix_full": {
+        "name": "Матрица Судьбы — полный разбор",
+        "description": (
+            "Подробная расшифровка всех 22+ позиций вашей матрицы по дате "
+            "рождения, включая денежный канал, отношения, здоровье и "
+            "кармические задачи"
+        ),
+        "stars": settings.PRICE_DESTINY_MATRIX_FULL,
+        "type": "one_time",
+    },
     "subscription_month": {
         "name": "Premium — 30 дней",
         "description": "Все интерпретации, прогнозы на неделю и месяц, Таро на неделю, push о значимых транзитах",
